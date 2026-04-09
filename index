@@ -1,0 +1,2888 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description"
+    content="Youth Work Tracker - Log interactions, track hours, manage timesheets for school-based youth work reporting." />
+  <title>Youth Work Tracker</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <style>
+    body {
+      background-color: #f5f5f4;
+      padding-bottom: 140px;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #15803d;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+      margin-top: -6px;
+    }
+
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: #e7e5e4;
+      border-radius: 3px;
+    }
+
+    .syncing {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .edit-mode {
+      border-color: #3b82f6 !important;
+      background-color: #eff6ff !important;
+    }
+
+    /* Viewer Mode Locks */
+    .viewer-mode .can-modify {
+      pointer-events: none !important;
+      opacity: 0.6 !important;
+      filter: grayscale(1);
+    }
+
+    .viewer-mode .admin-only {
+      display: none !important;
+    }
+
+    /* Calendar Grid Styles */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      border: 1px solid #f3f4f6;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .grid-day {
+      min-height: 100px;
+      padding: 6px;
+      border: 0.5px solid #f3f4f6;
+      background: white;
+      transition: background 0.2s;
+    }
+
+    .grid-day:hover {
+      background-color: #f9fafb;
+    }
+
+    .grid-day.other-month {
+      background-color: #f9fafb;
+      color: #d1d5db;
+      opacity: 0.5;
+    }
+
+    .grid-day.today {
+      background-color: #eff6ff;
+      box-shadow: inset 0 0 0 1px #3b82f6;
+    }
+
+    #notification-toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.75rem 1.5rem;
+      border-radius: 99px;
+      background: #1c1917;
+      color: white;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      z-index: 9999;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #notification-toast.show {
+      opacity: 1;
+      bottom: 110px;
+      pointer-events: auto;
+    }
+
+    /* Admin Collapsible Styles */
+    .admin-accordion-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out, padding 0.3s ease;
+    }
+
+    .admin-accordion-content.open {
+      max-height: 2000px;
+      padding-top: 1rem;
+      padding-bottom: 2rem;
+    }
+
+    .admin-card-header {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem !important;
+      border-radius: 1rem;
+      background: white;
+      border: 1px solid #e7e5e4;
+      transition: all 0.2s;
+    }
+
+    .admin-card-header:hover {
+      background: #fafaf9;
+      border-color: #d6d3d1;
+    }
+
+    .admin-card-header.active {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      background: #fafaf9;
+      border-color: #d6d3d1;
+    }
+
+    /* Admin Collapsible Styles */
+    .admin-accordion-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out, padding 0.3s ease;
+    }
+
+    .admin-accordion-content.open {
+      max-height: 2000px;
+      padding-top: 1rem;
+      padding-bottom: 2rem;
+    }
+
+    .admin-card-header {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      border-radius: 1rem;
+      background: white;
+      border: 1px solid #e7e5e4;
+      transition: all 0.2s;
+    }
+
+    .admin-card-header:hover {
+      background: #fafaf9;
+      border-color: #d6d3d1;
+    }
+
+    .admin-card-header.active {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      background: #fafaf9;
+    }
+
+    /* ---- Mobile Responsive Overrides ---- */
+    @media (max-width: 640px) {
+      body {
+        padding: 12px !important;
+        padding-bottom: 160px !important;
+      }
+
+      /* Larger touch targets */
+      button,
+      select,
+      input,
+      textarea {
+        min-height: 44px;
+      }
+
+      /* Make edit/delete buttons always visible on mobile (no hover) */
+      .group .opacity-0 {
+        opacity: 1 !important;
+      }
+
+      /* Calendar grid: smaller cells */
+      .grid-day {
+        min-height: 60px;
+        padding: 4px;
+      }
+
+      .calendar-grid {
+        font-size: 10px;
+      }
+
+      /* Bottom progress bar: stack vertically */
+      #bottomProgress .max-w-6xl {
+        flex-direction: column !important;
+        gap: 8px !important;
+      }
+
+      #bottomProgress {
+        padding: 10px 12px !important;
+      }
+
+      /* Header: full width stack */
+      header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+      }
+
+      /* History log cards */
+      .grid-cols-2 {
+        grid-template-columns: 1fr !important;
+      }
+
+      /* Stats cards */
+      .sm\:grid-cols-3 {
+        grid-template-columns: 1fr 1fr !important;
+      }
+
+      /* Form: single column on mobile */
+      #logForm .grid-cols-2,
+      #logForm .grid-cols-3 {
+        grid-template-columns: 1fr !important;
+      }
+
+      /* Reports table scroll */
+      #reportsContent table {
+        font-size: 11px;
+      }
+
+      /* Reduce bottom bar footprint */
+      #bottomProgress {
+        padding: 8px 12px !important;
+      }
+
+      #bottomProgress .h-6 {
+        height: 16px !important;
+        /* Smaller term bar */
+      }
+
+      #bottomProgress h2 {
+        font-size: 7px !important;
+      }
+
+      /* Hide Yearly Progress on Mobile */
+      .year-progress-container {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .sm\:grid-cols-3 {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="p-4 md:p-8 font-sans text-stone-900">
+  <div id="notification-toast"></div>
+  <div class="max-w-6xl mx-auto">
+    <!-- Top bar -->
+    <header
+      class="mb-6 border-b border-stone-300 pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <a href="#/dashboard" class="flex flex-col group hover:opacity-80 transition cursor-pointer">
+        <h1 class="text-3xl font-black tracking-tighter text-stone-900 group-hover:text-blue-700 transition">CBHS Youth
+          Work</h1>
+        <p id="status" class="text-stone-500 text-[10px] font-black uppercase tracking-widest mt-1">● Please sign in</p>
+        <p id="lastUpdated" class="hidden text-stone-500 text-[10px] font-black uppercase tracking-widest mt-1"></p>
+      </a>
+
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <!-- Menu -->
+        <div class="relative z-40">
+          <button id="menuBtn"
+            class="bg-stone-900 text-white text-[10px] font-black px-5 py-3 rounded-xl hover:bg-black transition uppercase tracking-widest shadow active:scale-95">
+            Menu
+          </button>
+          <div id="menuPanel"
+            class="hidden absolute right-0 mt-2 w-56 bg-white border border-stone-200 rounded-2xl shadow-lg overflow-hidden z-[60]">
+            <button id="adminNavBtn" onclick="go('#/admin')"
+              class="hidden w-full text-left px-4 py-3 hover:bg-stone-50 text-sm font-bold">Admin</button>
+            <button id="calendarNavBtn" onclick="go('#/calendar')"
+              class="w-full text-left px-4 py-3 hover:bg-stone-50 text-sm font-bold">Planned Events</button>
+            <button id="historyNavBtn" onclick="go('#/history')"
+              class="w-full text-left px-4 py-3 hover:bg-stone-50 text-sm font-bold">Log History</button>
+            <button id="timesheetsNavBtn" onclick="go('#/timesheets')"
+              class="w-full text-left px-4 py-3 hover:bg-stone-50 text-sm font-bold">Timesheets</button>
+            <button id="reportsNavBtn" onclick="go('#/reports')"
+              class="w-full text-left px-4 py-3 hover:bg-stone-50 text-sm font-bold">Reports</button>
+            <div class="border-t border-stone-200"></div>
+            <button onclick="fullSync()" class="w-full text-left px-4 py-3 hover:bg-stone-50 text-sm font-bold">Refresh
+              data</button>
+          </div>
+        </div>
+
+        <!-- Auth box (higher z-index so it’s always clickable) -->
+        <div class="relative z-50 bg-white rounded-2xl border border-stone-200 shadow-sm px-4 py-3">
+          <div id="signedOut">
+            <div class="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-2">Sign in</div>
+
+            <div class="flex flex-col gap-2">
+              <div id="gSignIn"></div>
+
+              <!-- Backup sign in trigger -->
+              <button id="backupSignInBtn"
+                class="w-full px-4 py-2 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700">
+                Sign in (backup)
+              </button>
+
+              <p class="text-[10px] text-stone-500">
+                If the Google button won’t click, use the backup button.
+              </p>
+            </div>
+          </div>
+
+          <div id="signedIn" class="hidden">
+            <div class="text-[10px] font-black uppercase tracking-widest text-stone-400">Signed in as</div>
+            <div class="text-sm font-black text-stone-900" id="userEmail"></div>
+            <div class="text-[10px] font-black uppercase tracking-widest mt-1" id="userRole"></div>
+            <button id="signOutBtn"
+              class="mt-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:text-red-700">
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Pages -->
+    <main>
+
+      <div id="pageCalendar" class="hidden py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <!-- Calendar Form -->
+          <div class="lg:col-span-1">
+            <div class="flex items-center justify-between mb-4">
+              <h2 id="calFormTitle" class="text-xl font-bold tracking-tight">Schedule Future Event</h2>
+              <button type="button" onclick="resetCalForm()" id="calCancelBtn"
+                class="text-[10px] font-black uppercase text-red-500 hover:text-red-600 transition">Cancel</button>
+            </div>
+            <form id="calForm" class="space-y-4 can-modify">
+              <div>
+                <label class="block text-[9px] font-black uppercase text-stone-400">Meeting Title / Topic</label>
+                <input type="text" id="calTitle" placeholder="e.g. Weekly Mentoring" required
+                  class="w-full p-2 border-0 bg-stone-50 rounded-xl mt-1 text-sm shadow-sm ring-1 ring-stone-200">
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[9px] font-black uppercase text-stone-400">Date</label>
+                  <input type="date" id="calDate" required
+                    class="w-full p-2 border-0 bg-stone-50 rounded-xl mt-1 text-sm shadow-sm ring-1 ring-stone-200">
+                </div>
+                <div>
+                  <label class="block text-[9px] font-black uppercase text-stone-400">Hours</label>
+                  <input type="number" id="calHours" step="0.5" min="0" placeholder="1.0" required
+                    class="w-full p-2 border-0 bg-stone-50 rounded-xl mt-1 text-sm shadow-sm ring-1 ring-stone-200">
+                </div>
+              </div>
+
+              <!-- User assignment -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <label class="text-[9px] font-black uppercase tracking-widest text-stone-400">Assign To</label>
+                </div>
+                <div class="relative">
+                  <button type="button" onclick="toggleUserDropdown('cal')"
+                    class="w-full p-2 border-0 bg-stone-50 rounded-xl text-left text-sm shadow-sm ring-1 ring-stone-200 flex justify-between items-center">
+                    <span id="calSelectedLabel" class="truncate">Select members...</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400" fill="none"
+                      viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <div id="calUserDropdown"
+                    class="hidden absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1">
+                    <!-- Checkboxes injected here -->
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[9px] font-black uppercase text-stone-400">Repeats Weekly For</label>
+                <select id="calRepeat"
+                  class="w-full p-2 rounded-xl mt-1 text-sm bg-stone-50 border ring-1 ring-stone-200">
+                  <option value="1">Once only</option>
+                  <option value="2">2 Weeks</option>
+                  <option value="4">4 Weeks</option>
+                  <option value="6">6 Weeks</option>
+                  <option value="10">Term (10 Weeks)</option>
+                </select>
+              </div>
+              <div id="calIntervalWeeksGroup">
+                <label class="block text-[9px] font-black uppercase text-stone-400">Repeat Every</label>
+                <select id="calIntervalWeeks"
+                  class="w-full p-2 rounded-xl mt-1 text-sm bg-stone-50 border ring-1 ring-stone-200">
+                  <option value="1">Week</option>
+                  <option value="2">2nd Week</option>
+                  <option value="3">3rd Week</option>
+                  <option value="4">Month (4th Week)</option>
+                </select>
+              </div>
+              <button type="submit" id="calSubmitBtn"
+                class="w-full bg-blue-600 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl shadow-lg hover:bg-blue-700 transition active:scale-95">
+                Add to Calendar
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Calendar List -->
+        <div class="lg:col-span-2">
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100">
+            <!-- Calendar Header -->
+            <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center bg-stone-100 rounded-xl p-1">
+                  <button onclick="changeMonth(-1)" class="p-2 hover:bg-white rounded-lg transition shadow-sm"><svg
+                      xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg></button>
+                  <h3 id="currentMonthYear"
+                    class="px-4 text-sm font-black uppercase tracking-widest text-stone-900 min-w-[140px] text-center">
+                    Month Year</h3>
+                  <button onclick="changeMonth(1)" class="p-2 hover:bg-white rounded-lg transition shadow-sm"><svg
+                      xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg></button>
+                </div>
+              </div>
+
+              <div class="flex items-center bg-stone-100 rounded-xl p-1">
+                <button id="viewGridBtn" onclick="setCalendarView('grid')"
+                  class="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition">Month
+                  View</button>
+                <button id="viewListBtn" onclick="setCalendarView('list')"
+                  class="px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition">Stack
+                  View</button>
+              </div>
+            </div>
+
+            <div id="calendarViewContainer">
+              <div id="calendarList" class="space-y-3 max-h-[700px] overflow-y-auto pr-2"></div>
+              <div id="calendarGrid" class="hidden"></div>
+            </div>
+
+            <div id="projectedStats"
+              class="mt-6 pt-4 border-t border-stone-100 text-[10px] font-black uppercase text-blue-600"></div>
+          </div>
+        </div>
+      </div>
+  </div>
+
+  <!-- Page: Timesheets -->
+  <div id="pageTimesheets" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500 py-8">
+    <div class="max-w-4xl mx-auto">
+      <div class="bg-white rounded-3xl shadow-sm border border-stone-200 overflow-hidden">
+        <div class="p-8 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
+          <div>
+            <h2 class="text-xs font-black uppercase text-stone-400 tracking-widest">Fortnightly Timesheets</h2>
+            <h1 class="text-2xl font-black text-stone-900 tracking-tighter mt-1">Review & Submit</h1>
+            <p class="text-sm text-stone-500 mt-1">Daily hours are automatically summed for each 14-day block.</p>
+          </div>
+          <div class="text-right">
+            <span class="text-[9px] font-black uppercase text-stone-400">Payroll Cycle</span>
+            <p class="text-sm font-black text-blue-600">Fortnightly (Sundays)</p>
+          </div>
+        </div>
+
+        <div id="timesheetContainer" class="p-8 space-y-8">
+          <!-- Timesheet periods generated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <section id="pageDashboard">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Form -->
+      <div id="formContainer"
+        class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border-t-4 border-green-700 h-fit transition-all duration-300">
+        <h2 id="formTitle" class="text-xl font-bold mb-2 tracking-tight text-center">New Engagement</h2>
+        <p id="viewerNotice"
+          class="hidden text-center text-[10px] font-black uppercase tracking-widest text-stone-400 mb-4">
+          Viewer mode: you can’t add/edit/delete entries.
+        </p>
+
+        <div id="editModeBanner" class="hidden mb-3 text-center">
+          <span
+            class="inline-block text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
+            Editing: <span id="editingIdText"></span>
+          </span>
+        </div>
+
+        <div id="formError" class="hidden mb-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm">
+        </div>
+
+        <form id="logForm" class="space-y-4 can-modify">
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <label class="block text-[9px] font-black uppercase text-stone-400">Date</label>
+              <input type="date" id="date" required
+                class="w-full p-2 border-0 bg-stone-50 rounded-xl mt-1 text-sm shadow-sm ring-1 ring-stone-200">
+            </div>
+            <!-- User Assignment -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="text-[9px] font-black uppercase tracking-widest text-stone-400">Team Members
+                  Involved</label>
+              </div>
+              <div class="relative">
+                <button type="button" onclick="toggleUserDropdown('log')"
+                  class="w-full p-2 border-0 bg-stone-50 rounded-xl text-left text-sm shadow-sm ring-1 ring-stone-200 flex justify-between items-center">
+                  <span id="logSelectedLabel" class="truncate">Select members...</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div id="logUserDropdown"
+                  class="hidden absolute z-50 mt-1 w-full bg-white border border-stone-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1">
+                  <!-- Checkboxes injected by updateUserSelectors() -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[9px] font-black uppercase text-stone-400">Hours</label>
+            <div class="grid grid-cols-2 gap-4">
+              <input type="number" id="hours" step="0.5" min="0" placeholder="e.g. 1.0" required
+                class="w-full p-2 border-0 bg-stone-50 rounded-xl mt-1 text-sm shadow-sm ring-1 ring-stone-200">
+              <input type="time" id="engagementTime"
+                class="w-full p-2 border-0 bg-stone-50 rounded-xl mt-1 text-sm shadow-sm ring-1 ring-stone-200">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[9px] font-black uppercase text-stone-400">Relational Type</label>
+            <select id="relationalType" required
+              class="w-full p-2 rounded-lg mt-1 text-sm bg-stone-50 border cursor-pointer">
+              <option value="" disabled selected>Select Type...</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4">
+            <div class="col-span-1">
+              <label class="block text-[9px] font-black uppercase text-stone-400">Attend.</label>
+              <input type="number" id="attendance" min="1" value="1" required
+                class="w-full p-2 border rounded-lg mt-1 text-sm bg-stone-50">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-[9px] font-black uppercase text-stone-400">Detail (Optional)</label>
+              <input type="text" id="target" placeholder="e.g. Riccarton Hub"
+                class="w-full p-2 border rounded-lg mt-1 text-sm bg-stone-50">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[9px] font-black uppercase text-stone-400">KPI Outcome</label>
+            <select id="kpi" required class="w-full p-2 rounded-lg mt-1 text-sm bg-stone-50 border cursor-pointer">
+              <option value="" disabled selected>Select KPI...</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-[9px] font-black uppercase text-stone-400">Impact Intensity</label>
+              <span id="impactBadge"
+                class="text-[9px] font-bold px-2 py-0.5 rounded bg-stone-200 text-stone-700 uppercase">Lvl 0</span>
+            </div>
+            <input type="range" id="impact" min="0" max="5" value="0"
+              class="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-blue-600 transition-all">
+            <p id="impactDesc" class="text-[10px] font-bold text-stone-400 mt-2 italic leading-tight">Lvl 0: Initial
+              interaction or brief check-in.</p>
+          </div>
+
+          <textarea id="notes" placeholder="Detailed notes..."
+            class="w-full p-2 border rounded-lg mt-1 h-20 text-sm bg-stone-50"></textarea>
+
+          <button type="submit" id="submitBtn"
+            class="w-full bg-stone-900 text-white font-bold py-4 rounded-xl shadow-md hover:bg-black transition uppercase tracking-widest text-[10px]">
+            Send to Sheet
+          </button>
+          <button type="button" id="cancelEdit" onclick="resetToNew()"
+            class="hidden w-full text-stone-400 font-bold py-2 uppercase text-[9px] tracking-widest mt-2 hover:text-stone-600">
+            Cancel Edit
+          </button>
+        </form>
+      </div>
+
+      <!-- Stats + Logs -->
+      <div class="lg:col-span-2 space-y-6">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-green-600">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-stone-400 text-[10px] font-black uppercase tracking-tighter">My Hours</p>
+                <p id="myHours" class="text-3xl font-black">0</p>
+              </div>
+              <div class="text-right">
+                <p class="text-stone-400 text-[10px] font-black uppercase tracking-tighter">Team Total</p>
+                <p id="teamHours" class="text-lg font-bold text-stone-500">0</p>
+              </div>
+            </div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-red-600 text-center">
+            <p class="text-stone-400 text-[10px] font-black uppercase tracking-tighter">High Impact</p>
+            <p id="totalHighImpact" class="text-3xl font-black">0</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-blue-500 text-center">
+            <p class="text-stone-400 text-[10px] font-black uppercase tracking-tighter">Log Count</p>
+            <p id="totalLogs" class="text-3xl font-black">0</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xs font-black uppercase text-stone-400 tracking-widest leading-none">Monthly Overview
+            </h2>
+            <div class="flex items-center gap-2">
+              <button onclick="changeMonth(-1)"
+                class="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition"><svg
+                  xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg></button>
+              <span id="dashMonthYear"
+                class="text-[10px] font-black uppercase text-stone-900 min-w-[100px] text-center">Loading...</span>
+              <button onclick="changeMonth(1)"
+                class="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-900 transition"><svg
+                  xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg></button>
+            </div>
+          </div>
+          <div id="dashCalendarGrid" class="mt-4">
+            <div class="loading text-xs py-20">Refreshing calendar...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORY PAGE -->
+  <section id="pageHistory" class="hidden py-8">
+    <div class="bg-white p-8 rounded-3xl shadow-sm border border-stone-200">
+      <div class="flex items-center justify-between mb-8 border-b border-stone-100 pb-6">
+        <div>
+          <h2 class="text-xs font-black uppercase text-stone-400 tracking-widest">Repository</h2>
+          <h1 class="text-2xl font-black text-stone-900 tracking-tighter mt-1">Full Engagement History</h1>
+        </div>
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="relative flex-1 group">
+            <input id="logSearch" type="search" placeholder="Search interactions..." oninput="renderLogs()"
+              class="w-full md:w-64 pl-9 pr-4 py-2 bg-stone-50 border-0 rounded-xl text-[11px] font-black outline-none ring-1 ring-stone-200 focus:ring-2 focus:ring-blue-500 transition shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4 absolute left-3 top-2.5 text-stone-400 group-focus-within:text-blue-500" fill="none"
+              viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <select id="sortOrder" onchange="renderLogs()"
+            class="text-[9px] font-black uppercase border-0 bg-stone-50 rounded-lg px-2 py-2 ring-1 ring-stone-200 outline-none cursor-pointer hover:bg-white transition">
+            <option value="recent">Recently Added</option>
+            <option value="date">Interaction Date</option>
+            <option value="hours">Most Hours</option>
+          </select>
+        </div>
+      </div>
+      <div id="logList" class="space-y-6 max-h-[1000px] overflow-y-auto pr-3">
+        <p class="text-stone-400 italic text-sm text-center py-20">No logs found…</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hidden by default, admin only -->
+  <section id="pageAdmin" class="admin-only hidden space-y-4">
+    <div class="max-w-4xl mx-auto space-y-4 px-4 pb-20">
+
+      <header class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-stone-900 tracking-tight">Admin Dashboard</h2>
+          <p class="text-xs text-stone-500 mt-1 uppercase font-black tracking-widest">System Configuration & Management
+          </p>
+        </div>
+        <button onclick="fullSync()"
+          class="px-5 py-2.5 bg-stone-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-black transition shadow-md active:scale-95">Sync
+          Full Registry</button>
+      </header>
+
+      <!-- User Registry Section -->
+      <div class="admin-card">
+        <div class="admin-card-header" onclick="toggleAdminSection('section-users', this)">
+          <div class="flex items-center gap-3">
+            <div class="bg-blue-50 p-2.5 rounded-xl text-blue-600">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+            <span class="font-bold text-stone-800">User Registry & Roles</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400 transition-transform duration-300"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+        <div id="section-users"
+          class="admin-accordion-content px-6 bg-white border-x border-b border-stone-200 rounded-b-2xl">
+          <div id="adminUserRegistry" class="pt-2">Loading team members...</div>
+        </div>
+      </div>
+
+      <!-- Term Editor Section -->
+      <div class="admin-card">
+        <div class="admin-card-header" onclick="toggleAdminSection('section-terms', this)">
+          <div class="flex items-center gap-3">
+            <div class="bg-orange-50 p-2.5 rounded-xl text-orange-600">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <span class="font-bold text-stone-800">Term Timeframes & Goals</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400 transition-transform duration-300"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+        <div id="section-terms"
+          class="admin-accordion-content px-6 bg-white border-x border-b border-stone-200 rounded-b-2xl">
+          <div class="flex items-center gap-4 mb-6 p-4 bg-stone-50 rounded-2xl border border-stone-100 mt-4">
+            <label class="text-[10px] font-black uppercase text-stone-400 tracking-widest whitespace-nowrap">Filter
+              Year:</label>
+            <select id="termYearFilter" onchange="renderTermEditor()"
+              class="p-2 rounded-lg border-stone-200 text-xs font-bold bg-white focus:ring-2 focus:ring-orange-500">
+              <!-- Auto-populated -->
+            </select>
+          </div>
+          <div id="termEditorList" class="space-y-4 pb-4">Loading terms...</div>
+        </div>
+      </div>
+
+      <!-- Dropdown Settings Section -->
+      <div class="admin-card">
+        <div class="admin-card-header" onclick="toggleAdminSection('section-dropdowns', this)">
+          <div class="flex items-center gap-3">
+            <div class="bg-purple-50 p-2.5 rounded-xl text-purple-600">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+              </svg>
+            </div>
+            <span class="font-bold text-stone-800">Dropdown Categories (RelTypes/KPIs)</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400 transition-transform duration-300"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+        <div id="section-dropdowns"
+          class="admin-accordion-content px-6 bg-white border-x border-b border-stone-200 rounded-b-2xl">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 pt-4">
+            <!-- Relational Types -->
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-[10px] font-black uppercase tracking-widest text-stone-400">Engagement Types</h3>
+                <div class="flex gap-2">
+                  <input type="text" id="newRelType" placeholder="Add type..."
+                    class="p-2 border rounded-xl text-xs bg-stone-50 shadow-inner">
+                  <button onclick="addDropdownOption('relType')"
+                    class="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition active:scale-95"><svg
+                      xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg></button>
+                </div>
+              </div>
+              <div id="relTypeTagList"
+                class="flex flex-wrap gap-2 p-4 bg-stone-50 rounded-2xl border border-stone-100 min-h-[100px] shadow-inner">
+              </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-[10px] font-black uppercase tracking-widest text-stone-400">KPI Outcomes</h3>
+                <div class="flex gap-2">
+                  <input type="text" id="newKpi" placeholder="Add KPI..."
+                    class="p-2 border rounded-xl text-xs bg-stone-50 shadow-inner">
+                  <button onclick="addDropdownOption('kpi')"
+                    class="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition active:scale-95"><svg
+                      xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg></button>
+                </div>
+              </div>
+              <div id="kpiTagList"
+                class="flex flex-wrap gap-2 p-4 bg-stone-50 rounded-2xl border border-stone-100 min-h-[100px] shadow-inner">
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-stone-100 pb-4 gap-4">
+            <span id="dropdownSaveStatus" class="text-[10px] font-bold text-stone-400 italic">Syncing with Google
+              Sheets...</span>
+            <button onclick="saveDropdownSettings()"
+              class="w-full sm:w-auto bg-stone-900 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition shadow-lg active:scale-95">Save
+              All Categories</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Settings Section -->
+      <div class="admin-card">
+        <div class="admin-card-header" onclick="toggleAdminSection('section-system', this)">
+          <div class="flex items-center gap-3">
+            <div class="bg-stone-50 p-2.5 rounded-xl text-stone-600">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <span class="font-bold text-stone-800">Cycle & System Settings</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400 transition-transform duration-300"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+        <div id="section-system"
+          class="admin-accordion-content px-6 bg-white border-x border-b border-stone-200 rounded-b-2xl">
+          <div id="adminCycleSettings" class="pb-4 pt-2">Loading system settings...</div>
+        </div>
+      </div>
+
+      <!-- Diagnostics Section -->
+      <div class="admin-card">
+        <div class="admin-card-header" onclick="toggleAdminSection('section-diag', this)">
+          <div class="flex items-center gap-3">
+            <div class="bg-red-50 p-2.5 rounded-xl text-red-600">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <span class="font-bold text-stone-800">Notification Diagnostics</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-stone-400 transition-transform duration-300"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+        <div id="section-diag"
+          class="admin-accordion-content px-6 bg-white border-x border-b border-stone-200 rounded-b-2xl">
+          <div class="flex flex-wrap gap-4 py-6">
+            <button onclick="testAdminNotification('test_email')"
+              class="px-6 py-3 bg-stone-100 text-stone-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-200 transition active:scale-95 shadow-sm">Test
+              Connection Email</button>
+            <button onclick="testAdminNotification('test_reminder')"
+              class="px-6 py-3 bg-stone-100 text-stone-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-200 transition active:scale-95 shadow-sm">Force
+              Send Reminders</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- DEPRECATED PAGES REMOVED -->
+
+  <!-- REPORTS PAGE -->
+  <section id="pageReports" class="hidden py-8">
+    <div class="max-w-5xl mx-auto space-y-8">
+      <div class="bg-white p-8 rounded-3xl shadow-sm border border-stone-200">
+        <div
+          class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 border-b border-stone-100 pb-6 gap-4">
+          <div>
+            <h2 class="text-xs font-black uppercase text-stone-400 tracking-widest">Analytics</h2>
+            <h1 class="text-2xl font-black text-stone-900 tracking-tighter mt-1">Term & Year Reports</h1>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="reportYearFilter" onchange="renderReportsPage()"
+              class="text-[10px] font-black uppercase border-0 bg-stone-50 rounded-lg px-3 py-2 ring-1 ring-stone-200 cursor-pointer">
+            </select>
+          </div>
+        </div>
+        <div id="reportsContent" class="space-y-6">
+          <p class="text-stone-400 italic text-sm text-center py-12">Loading reports...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  </main>
+
+  <!-- Bottom progress bar (dashboard only) -->
+  <div id="bottomProgress"
+    class="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 p-4 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-40 overflow-hidden">
+    <div class="max-w-6xl mx-auto flex flex-col gap-4">
+
+      <!-- Term Progress (Main) - AT THE TOP -->
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="text-center md:text-left">
+          <h2 class="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1 leading-none">Term Progress
+          </h2>
+          <p class="text-lg font-black leading-none text-stone-900">
+            <span id="displayPercent">0</span>%
+            <span class="text-[10px] font-normal text-stone-400 italic">of <span id="termGoalVal">100</span>h</span>
+          </p>
+        </div>
+        <div class="flex-1 w-full md:max-w-xl px-2">
+          <div
+            class="h-6 w-full bg-stone-100 rounded-full overflow-hidden border border-stone-200 relative group shadow-inner">
+            <!-- Projected background -->
+            <div id="projectedBar"
+              class="absolute left-0 top-0 h-full bg-blue-600/20 transition-all duration-1000 ease-out z-10"
+              style="width: 0%"></div>
+            <!-- Actual foreground -->
+            <div id="progressBar"
+              class="absolute left-0 top-0 h-full bg-blue-600 transition-all duration-1000 ease-out z-20 shadow-[0_0_15px_rgba(37,99,235,0.3)]"
+              style="width: 0%"></div>
+
+            <!-- Label overlays -->
+            <div class="absolute inset-0 flex items-center justify-between px-3 z-30 pointer-events-none">
+              <span id="actualHoursLabel"
+                class="text-[8px] font-black text-white uppercase tracking-tighter drop-shadow-sm">LOGGED: 0H</span>
+              <span id="combinedHoursLabel"
+                class="text-[8px] font-black text-blue-900/40 uppercase tracking-tighter drop-shadow-sm">COMBINED:
+                0H</span>
+            </div>
+          </div>
+          <div class="flex justify-between mt-1 px-1">
+            <span id="progressBarStatus"
+              class="text-[8px] font-black uppercase text-blue-600 italic tracking-widest">PERSONAL TARGET</span>
+            <span id="teamTotalDisplay" class="text-[8px] font-black uppercase text-stone-400 italic">Team Total:
+              0h</span>
+          </div>
+        </div>
+        <div class="text-center md:text-right">
+          <div id="statusBadge"
+            class="inline-flex items-center gap-2 text-[10px] font-bold text-green-800 bg-green-50 px-3 py-1 rounded-full border border-green-100">
+            <span class="w-1.5 h-1.5 bg-green-600 rounded-full animate-pulse"></span>
+            <span id="hoursRemainingText">100 hours left</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="w-full h-px bg-stone-100"></div>
+
+      <!-- Year Progress (Small) - BELOW TERM -->
+      <div class="year-progress-container flex items-center gap-4">
+        <div class="w-24 shrink-0">
+          <h2 class="text-[8px] font-black uppercase text-stone-400 tracking-widest leading-none">Yearly Progress</h2>
+          <p class="text-[10px] font-black text-stone-900 mt-1"><span id="yearPercent">0</span>%</p>
+        </div>
+        <div class="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden border border-stone-200 relative">
+          <div id="yearProgressBar"
+            class="absolute left-0 top-0 h-full bg-stone-800 transition-all duration-1000 ease-out" style="width: 0%">
+          </div>
+        </div>
+        <div class="w-32 text-right shrink-0">
+          <span id="yearHoursLabel" class="text-[8px] font-black text-stone-400 uppercase tracking-tighter">0 /
+            0H</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI_6e1AS3DDNgbLDPY-v2-PVN-qisVUj7FDBn-KXTX0awDoT4AsyqKg396Xx7MYKT-/exec";
+    const CLIENT_ID = "598357137191-04lp6pqg2ehjhagg87kc5ggeaub2erpc.apps.googleusercontent.com";
+    const TERM_GOAL = 100;
+
+    const SEED_OPTIONS = {
+      relationalTypes: [
+        "One-on-One",
+        "Group Session",
+        "Outreach",
+        "Family Engagement",
+        "Community Event",
+        "Mentoring",
+        "Crisis Support",
+        "Referral",
+        "Other"
+      ],
+      kpis: [
+        "Relationship Building",
+        "Skill Development",
+        "Mental Health Support",
+        "Education Engagement",
+        "Community Connection",
+        "Leadership Development",
+        "Risk Reduction",
+        "Cultural Support",
+        "Other"
+      ]
+    };
+
+    let logs = [];
+    let projectedLogs = [];
+    let submittedPeriods = [];
+    let users = [];
+    let terms = [];
+    let myEmail = "";
+    let myAlias = "";
+    let selectedTermIndex = -1; // -1 = current term auto-detect
+    let cycleStart = "2025-02-01";
+    let editingId = null;
+    let editingCalId = null;
+
+    let calendarViewMode = 'grid';
+    let currentCalDate = new Date();
+    let dashCalDate = new Date(); // Separate state for dashboard calendar
+
+    let authToken = localStorage.getItem("impacttracker_id_token") || "";
+    let myRole = null; // "admin" | "viewer"
+    let dropdownOptions = null;
+
+    // ---- menu ----
+    const menuBtn = document.getElementById("menuBtn");
+    const menuPanel = document.getElementById("menuPanel");
+    menuBtn.addEventListener("click", () => menuPanel.classList.toggle("hidden"));
+    window.addEventListener("click", (e) => {
+      if (!menuBtn.contains(e.target) && !menuPanel.contains(e.target)) menuPanel.classList.add("hidden");
+    });
+    function go(hash) { location.hash = hash; menuPanel.classList.add("hidden"); }
+
+    function currentRoute() {
+      const h = location.hash || "#/dashboard";
+      if (h === "#/admin") return "admin";
+      if (h === "#/calendar") return "calendar";
+      if (h === "#/history") return "history";
+      if (h === "#/timesheets") return "timesheets";
+      if (h === "#/reports") return "reports";
+      return "dashboard";
+    }
+
+    function renderRoute() {
+      const route = currentRoute();
+      if (location.hash === "#/dropdowns") location.hash = "#/admin";
+
+      const isAdmin = myRole === "admin";
+
+      const pages = ["pageDashboard", "pageAdmin", "pageCalendar", "pageHistory", "pageTimesheets", "pageReports"];
+      pages.forEach(p => {
+        const el = document.getElementById(p);
+        if (el) el.classList.toggle("hidden", p !== `page${route[0].toUpperCase()}${route.slice(1)}`);
+      });
+
+      const adminBtn = document.getElementById("adminNavBtn");
+      if (adminBtn) adminBtn.classList.toggle("hidden", !isAdmin);
+
+      const progress = document.getElementById("bottomProgress");
+      if (progress) progress.classList.toggle("hidden", !["dashboard", "calendar"].includes(route));
+
+      if (route === "timesheets") renderTimesheetPage();
+      if (route === "reports") renderReportsPage();
+
+      if (route === "admin" && !isAdmin) location.hash = "#/dashboard";
+
+      if (route === "admin" && isAdmin) {
+        refreshUserManagementList();
+        renderTermEditor();
+        renderAdminCycleSettings();
+      }
+    }
+    window.addEventListener("hashchange", renderRoute);
+
+    // ---- helpers ----
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setStatus(text, cls, syncing = false) {
+      const el = document.getElementById("status");
+      el.innerText = text;
+      el.className = (cls || "text-stone-500") + " text-[10px] font-black uppercase tracking-widest mt-1" + (syncing ? " syncing" : "");
+    }
+
+    function setLastUpdated(d = new Date()) {
+      const el = document.getElementById("lastUpdated");
+      if (el) {
+        el.classList.remove("hidden");
+        el.innerText = `● Last updated: ${d.toLocaleString()}`;
+      }
+    }
+
+    function showFormError(msg) {
+      const el = document.getElementById("formError");
+      if (el) {
+        el.innerText = msg;
+        el.classList.remove("hidden");
+      }
+    }
+    function clearFormError() {
+      const el = document.getElementById("formError");
+      if (el) {
+        el.innerText = "";
+        el.classList.add("hidden");
+      }
+    }
+
+    async function apiGet(action) {
+      if (!authToken) throw new Error("Not signed in");
+      const url = new URL(SCRIPT_URL);
+      url.searchParams.set("token", authToken);
+      if (action) url.searchParams.set("action", action);
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      const data = await res.json();
+      if (!data.ok) {
+        let msg = data.error || "Request failed";
+        if (data.code) msg += ` [Error Code: ${data.code}]`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    async function apiPost(payload) {
+      if (!authToken) throw new Error("Not signed in");
+      const res = await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ ...payload, token: authToken }) });
+      const data = await res.json();
+      if (!data.ok) {
+        let msg = data.error || "Request failed";
+        if (data.code) msg += ` [Error Code: ${data.code}]`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    // Wait for auth to apply options
+    // applyOptionsToForm(DEFAULT_OPTIONS); (Removed hardcoded defaults)
+
+    // ---- dropdown options ----
+    function applyOptionsToForm(options) {
+      // Use SEED_OPTIONS if nothing is on the server (first run)
+      const data = (options?.relationalTypes?.length || options?.kpis?.length) ? options : SEED_OPTIONS;
+
+      const relSel = document.getElementById("relationalType");
+      const kpiSel = document.getElementById("kpi");
+
+      function setSelect(sel, list, placeholder) {
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = "";
+
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.disabled = true;
+        ph.selected = true;
+        ph.textContent = placeholder;
+        sel.appendChild(ph);
+
+        (list || []).forEach(v => {
+          const opt = document.createElement("option");
+          opt.value = v;
+          opt.textContent = v;
+          sel.appendChild(opt);
+        });
+
+        if (current && (list || []).includes(current)) sel.value = current;
+      }
+
+      if (relSel) setSelect(relSel, data.relationalTypes, "Select Type...");
+      if (kpiSel) setSelect(kpiSel, data.kpis, "Select KPI...");
+    }
+
+
+    // ---- tag-based dropdown editor ----
+    // In-memory option arrays (populated from backend or defaults)
+    let _relTypes = [];
+    let _kpis = [];
+
+    function renderTagList(listId, arr, key) {
+      const container = document.getElementById(listId);
+      if (!container) return;
+
+      const countEl = document.getElementById(key === "relType" ? "relCount" : "kpiCount");
+      if (countEl) countEl.innerText = `${arr.length} option${arr.length === 1 ? "" : "s"}`;
+
+      if (!arr.length) {
+        container.innerHTML = '<p class="text-stone-400 text-xs italic py-4 text-center">No options configured.</p>';
+        return;
+      }
+      container.innerHTML = arr.map((v, i) => `
+        <div id="tag-${key}-${i}" class="flex items-center gap-3 bg-white border border-stone-100 rounded-xl px-4 py-3 group hover:border-blue-200 transition shadow-sm">
+          <span class="flex-1 font-bold text-stone-700 tag-label truncate">${escapeHtml(v)}</span>
+          <input class="flex-1 hidden tag-input border border-blue-500 rounded-lg px-2 py-1 text-sm bg-blue-50 outline-none font-bold" value="${escapeHtml(v)}"
+            onkeydown="if(event.key==='Enter'){saveDropdownEdit('${key}',${i})}if(event.key==='Escape'){cancelDropdownEdit('${key}',${i})}">
+          
+          <div class="flex gap-1">
+            <button onclick="startDropdownEdit('${key}',${i})"
+              class="tag-edit-btn p-1 text-stone-300 hover:text-blue-500 transition tooltip" title="Edit">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            </button>
+            <button onclick="saveDropdownEdit('${key}',${i})"
+              class="tag-save-btn hidden p-1 text-green-500 hover:text-green-700 transition">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+            </button>
+            <button onclick="cancelDropdownEdit('${key}',${i})"
+              class="tag-cancel-btn hidden p-1 text-stone-400 hover:text-stone-600 transition">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <button onclick="removeDropdownOption('${key}',${i})"
+              class="tag-remove-btn p-1 text-stone-300 hover:text-red-500 transition tooltip" title="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function startDropdownEdit(key, i) {
+      const row = document.getElementById(`tag-${key}-${i}`);
+      if (!row) return;
+      row.querySelector(".tag-label").classList.add("hidden");
+      row.querySelector(".tag-input").classList.remove("hidden");
+      row.querySelector(".tag-edit-btn").classList.add("hidden");
+      row.querySelector(".tag-remove-btn").classList.add("hidden");
+      row.querySelector(".tag-save-btn").classList.remove("hidden");
+      row.querySelector(".tag-cancel-btn").classList.remove("hidden");
+      row.querySelector(".tag-input").focus();
+    }
+
+    function cancelDropdownEdit(key, i) {
+      const arr = key === "relType" ? _relTypes : _kpis;
+      const listId = key === "relType" ? "relTypeTagList" : "kpiTagList";
+      renderTagList(listId, arr, key);
+    }
+
+    function saveDropdownEdit(key, i) {
+      const row = document.getElementById(`tag-${key}-${i}`);
+      if (!row) return;
+      const newVal = (row.querySelector(".tag-input").value || "").trim();
+      if (!newVal) return;
+      if (key === "relType") {
+        _relTypes[i] = newVal;
+        renderTagList("relTypeTagList", _relTypes, "relType");
+      } else {
+        _kpis[i] = newVal;
+        renderTagList("kpiTagList", _kpis, "kpi");
+      }
+    }
+
+    function addDropdownOption(key) {
+      const inputId = key === "relType" ? "newRelType" : "newKpi";
+      const input = document.getElementById(inputId);
+      const val = (input.value || "").trim();
+      if (!val) return;
+
+      if (key === "relType") {
+        if (!_relTypes.includes(val)) { _relTypes.push(val); renderTagList("relTypeTagList", _relTypes, "relType"); }
+      } else {
+        if (!_kpis.includes(val)) { _kpis.push(val); renderTagList("kpiTagList", _kpis, "kpi"); }
+      }
+      input.value = "";
+      input.focus();
+    }
+
+    function removeDropdownOption(key, index) {
+      if (key === "relType") {
+        _relTypes.splice(index, 1);
+        renderTagList("relTypeTagList", _relTypes, "relType");
+      } else {
+        _kpis.splice(index, 1);
+        renderTagList("kpiTagList", _kpis, "kpi");
+      }
+    }
+
+    async function loadDropdownSettings() {
+      if (myRole !== "admin") return;
+      const status = document.getElementById("dropdownSaveStatus");
+      status.className = "text-sm font-bold text-stone-500";
+      status.textContent = "Loading…";
+
+      try {
+        const raw = await apiPost({ action: "options_get" });
+        const hasCustom = (raw.options?.relationalTypes?.length || raw.options?.kpis?.length);
+        const opts = hasCustom ? raw.options : SEED_OPTIONS;
+        dropdownOptions = opts;
+
+        _relTypes = Array.isArray(opts.relationalTypes) ? [...opts.relationalTypes] : [];
+        _kpis = Array.isArray(opts.kpis) ? [...opts.kpis] : [];
+
+        renderTagList("relTypeTagList", _relTypes, "relType");
+        renderTagList("kpiTagList", _kpis, "kpi");
+
+        status.className = "flex items-center gap-2 text-[11px] font-bold text-green-600";
+        status.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> ${hasCustom ? "Spreadsheet connected" : "Using defaults — save to initialize Sheets"}`;
+      } catch (e) {
+        status.className = "text-[11px] font-bold text-red-600";
+        status.textContent = "Connection error: " + String(e?.message || e);
+      }
+    }
+
+    async function saveDropdownSettings() {
+      if (myRole !== "admin") return;
+      const status = document.getElementById("dropdownSaveStatus");
+      status.className = "text-sm font-bold text-stone-500";
+      status.textContent = "Saving…";
+
+      const options = { relationalTypes: _relTypes, kpis: _kpis };
+
+      try {
+        await apiPost({ action: "options_set", options: options });
+
+        dropdownOptions = options;
+        applyOptionsToForm(dropdownOptions);
+        status.className = "flex items-center gap-2 text-[11px] font-bold text-green-600";
+        status.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Saved successfully! Changes applied.`;
+      } catch (e) {
+        status.className = "text-[11px] font-bold text-red-600";
+        status.textContent = "Save failed: " + String(e?.message || e);
+      }
+    }
+
+    // ---- auth UI ----
+    function setSignedInUI(email, role) {
+      const out = document.getElementById("signedOut");
+      if (out) out.classList.add("hidden");
+      const inEl = document.getElementById("signedIn");
+      if (inEl) inEl.classList.remove("hidden");
+      const em = document.getElementById("userEmail");
+      if (em) em.innerText = email;
+      const rl = document.getElementById("userRole");
+      if (rl) rl.innerText = role === "admin" ? "Role: Admin" : "Role: User";
+      myRole = role;
+
+      const notice = document.getElementById("viewerNotice");
+      if (notice) notice.classList.add("hidden");
+      const form = document.getElementById("logForm");
+      if (form) form.style.display = "";
+
+      renderRoute();
+    }
+
+    function setSignedOutUI() {
+      const out = document.getElementById("signedOut");
+      if (out) out.classList.remove("hidden");
+      const inEl = document.getElementById("signedIn");
+      if (inEl) inEl.classList.add("hidden");
+      const notice = document.getElementById("viewerNotice");
+      if (notice) notice.classList.add("hidden");
+      const form = document.getElementById("logForm");
+      if (form) form.style.display = "none";
+      const list = document.getElementById("logList");
+      if (list) list.innerHTML = '<p class="text-stone-400 italic text-sm text-center py-20">Sign in to load data…</p>';
+      myRole = null;
+      renderRoute();
+    }
+
+    document.getElementById("signOutBtn").addEventListener("click", () => {
+      authToken = "";
+      localStorage.removeItem("impacttracker_id_token");
+      setSignedOutUI();
+      setStatus("● Signed out", "text-stone-500");
+    });
+
+    // ---- dashboard stats handle via computeAndRenderStats() later in file ----
+
+    // Global state for collapsible groups
+    let collapsedDates = new Set();
+
+    function toggleDateCollapse(dateKey) {
+      if (collapsedDates.has(dateKey)) {
+        collapsedDates.delete(dateKey);
+      } else {
+        collapsedDates.add(dateKey);
+      }
+      renderLogs();
+    }
+
+    function formatDateHeader(dateStr) {
+      if (!dateStr) return "";
+      try {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        return date.toLocaleDateString('en-GB', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short'
+        });
+      } catch (e) { return dateStr; }
+    }
+
+    function renderLogs() {
+      const list = document.getElementById('logList');
+      if (!list) return;
+
+      const searchVal = document.getElementById('logSearch')?.value.toLowerCase() || '';
+
+      // 1. Filter
+      let filtered = logs.filter(log => {
+        if (!searchVal) return true;
+        const searchContent = [
+          log.relationalType,
+          log.target,
+          log.kpi,
+          log.notes,
+          log.date,
+          log.hours,
+          log.attendance
+        ].join(' ').toLowerCase();
+        return searchContent.includes(searchVal);
+      });
+
+      if (!filtered.length) {
+        if (!logs.length) {
+          list.innerHTML = '<p class="text-stone-400 italic text-sm text-center py-20">Sign in to load data…</p>';
+        } else {
+          list.innerHTML = `<div class="py-20 text-center"><p class="text-stone-400 italic text-sm mb-2">No matching engagements found.</p>
+            <button onclick="document.getElementById('logSearch').value='';renderLogs()" class="text-blue-500 text-[10px] font-black uppercase">Clear search</button></div>`;
+        }
+        return;
+      }
+
+      // 2. Sort
+      const sortVal = document.getElementById('sortOrder')?.value || 'recent';
+      filtered.sort((a, b) => {
+        if (sortVal === 'date') return new Date(b.date) - new Date(a.date);
+        if (sortVal === 'hours') return parseFloat(b.hours) - parseFloat(a.hours);
+        return (b.timestamp || '') > (a.timestamp || '') ? 1 : -1;
+      });
+
+      // 3. Group by Date
+      const groups = {};
+      const dateOrder = [];
+      filtered.forEach(log => {
+        if (!groups[log.date]) {
+          groups[log.date] = [];
+          dateOrder.push(log.date);
+        }
+        groups[log.date].push(log);
+      });
+
+      // 4. Render
+      const isAdmin = myRole === "admin";
+
+      list.innerHTML = dateOrder.map((date, idx) => {
+        const isCollapsed = collapsedDates.has(date);
+        const dayLogs = groups[date];
+        const dayHours = dayLogs.reduce((sum, l) => sum + parseFloat(l.hours || 0), 0).toFixed(1);
+
+        return `
+          <div class="space-y-3 group/day">
+            <!-- Date Header -->
+            <button onclick="toggleDateCollapse('${date}')" 
+              class="w-full flex items-center justify-between p-3 rounded-2xl bg-stone-100/50 hover:bg-stone-100 transition sticky top-0 z-10 backdrop-blur-sm border border-stone-200/40 shadow-sm">
+              <div class="flex items-center gap-3">
+                <div class="bg-white p-2 rounded-xl border border-stone-200 shadow-sm flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-600 ${isCollapsed ? 'rotate-[-90deg]' : ''} transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                <div class="flex flex-col items-start text-left">
+                  <span class="text-[11px] font-black text-stone-900 uppercase tracking-tight">${formatDateHeader(date)}</span>
+                  <span class="text-[9px] font-bold text-stone-400 leading-none">${dayLogs.length} interaction${dayLogs.length === 1 ? '' : 's'}</span>
+                </div>
+              </div>
+              <div class="text-right">
+                <span class="text-[9px] font-black text-stone-500 bg-white px-2.5 py-1 rounded-full border border-stone-200 shadow-sm">${dayHours} Hours Total</span>
+              </div>
+            </button>
+
+            <!-- Entries for this day -->
+            <div class="${isCollapsed ? 'hidden' : 'grid grid-cols-1 gap-3 px-1'}">
+              ${dayLogs.map(log => {
+          const impact = parseInt(log.impact, 10);
+          const impactBadgeClass = impact >= 4 ? 'bg-red-600 text-white shadow-red-100 shadow-lg' : 'bg-stone-200 text-stone-700';
+
+          return `
+                  <div class="p-4 rounded-2xl bg-white border border-stone-100 shadow-sm relative group hover:shadow-md transition-all">
+                    ${isAdmin ? `
+                      <div class="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="startEdit('${escapeHtml(log.id)}')" class="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                        <button onclick="deleteRow('${escapeHtml(log.id)}')" class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                      </div>
+                    ` : ""}
+
+                    <div class="flex justify-between items-start mb-3">
+                      <div class="flex flex-col">
+                        <div class="flex items-center gap-2 mb-1">
+                          <h4 class="font-bold text-stone-900 text-base leading-tight">${escapeHtml(log.kpi)}</h4>
+                          ${log.engagementTime ? `<span class="text-[9px] font-black text-stone-400 bg-stone-50 px-2 py-0.5 rounded-full border border-stone-100">${escapeHtml(log.engagementTime)}</span>` : ""}
+                        </div>
+                      </div>
+                      <span class="text-[9px] font-black px-2 py-1 rounded-full ${impactBadgeClass} pointer-events-none">LVL ${escapeHtml(impact)}</span>
+                    </div>
+
+                    <div class="pt-4 border-t border-stone-50 grid grid-cols-2 gap-y-3 gap-x-4">
+                      <div class="flex flex-col">
+                        <span class="text-[8px] font-black text-stone-400 uppercase tracking-widest leading-none mb-1">Type</span>
+                        <span class="text-[11px] font-bold text-stone-700 truncate">${escapeHtml(log.relationalType)}</span>
+                      </div>
+                      <div class="flex flex-col">
+                        <span class="text-[8px] font-black text-stone-400 uppercase tracking-widest leading-none mb-1">Detail</span>
+                        <span class="text-[11px] font-bold text-stone-700 truncate">${escapeHtml(log.target || "N/A")}</span>
+                      </div>
+                      <div class="flex flex-col">
+                        <span class="text-[8px] font-black text-stone-400 uppercase tracking-widest leading-none mb-1">Details</span>
+                        <span class="text-[11px] font-bold text-stone-700">${escapeHtml(log.hours)}h • ${escapeHtml(log.attendance)}px</span>
+                      </div>
+                      <div class="flex flex-col text-right">
+                        <span class="text-[8px] font-black text-stone-300 uppercase tracking-widest leading-none mb-1">Added</span>
+                        <span class="text-[8px] font-bold text-stone-400">${escapeHtml(log.timestamp || 'Historical')}</span>
+                        ${log.addedBy ? `<span class="text-[8px] font-black uppercase text-blue-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-2 w-2 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
+                          ${log.addedBy.split(",").map(e => getUserAlias(e)).join(", ")}
+                        </span>` : ''}
+                        ${log.lastEditedBy ? `<span class="text-[8px] font-bold text-orange-400 mt-0.5">edited by ${escapeHtml(log.lastEditedBy)}</span>` : ''}
+                      </div>
+                    </div>
+
+                    ${log.notes ? `
+                      <div class="mt-4 p-3 rounded-xl bg-stone-50/50 border border-stone-100/50">
+                        <p class="text-xs text-stone-600 italic leading-relaxed font-medium">"${escapeHtml(log.notes)}"</p>
+                      </div>
+                    ` : ""}
+                  </div>
+                `;
+        }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function fullSync() {
+      if (!authToken) return;
+      setStatus("● Refreshing data...", "text-blue-600", true);
+
+      try {
+        const data = await apiGet();
+        const allRows = Array.isArray(data.logs) ? data.logs : [];
+        logs = allRows.filter(r => !String(r.id).startsWith("__"));
+
+        projectedLogs = Array.isArray(data.projected) ? data.projected : [];
+        submittedPeriods = Array.isArray(data.submitted) ? data.submitted : [];
+        terms = Array.isArray(data.terms) ? data.terms : [];
+        users = Array.isArray(data.users) ? data.users : [];
+        myEmail = data.email || "";
+        myAlias = data.alias || "";
+        cycleStart = data.cycleStart || "2025-02-01";
+
+        // Use SEED_OPTIONS if server returns null/empty
+        const hasOptions = (data.options?.relationalTypes?.length || data.options?.kpis?.length);
+        dropdownOptions = hasOptions ? data.options : SEED_OPTIONS;
+        applyOptionsToForm(dropdownOptions);
+        updateUserSelectors();
+
+        computeAndRenderStats();
+        renderLogs();
+        renderCalendar();
+        renderDashboardCalendar();
+        if (myRole === "admin") refreshUserManagementList(); // renamed from refreshAdminList
+        setLastUpdated(new Date());
+        setStatus("● Up to Date", "text-green-600");
+      } catch (err) {
+        console.error(err);
+        setStatus("● Error", "text-red-600");
+        alert(String(err?.message || err));
+      }
+    }
+
+    // ---- Calendar Methods ----
+    function setCalendarView(mode) {
+      calendarViewMode = mode;
+      renderCalendar();
+    }
+
+    function changeMonth(delta) {
+      currentCalDate.setMonth(currentCalDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const isGrid = calendarViewMode === 'grid';
+      const list = document.getElementById('calendarList');
+      const grid = document.getElementById('calendarGrid');
+      if (list) list.classList.toggle('hidden', isGrid);
+      if (grid) grid.classList.toggle('hidden', !isGrid);
+
+      // Update Header Text
+      const monthYear = currentCalDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      const currentMonthYear = document.getElementById('currentMonthYear');
+      if (currentMonthYear) currentMonthYear.innerText = monthYear;
+
+      // Update Toggles
+      const gridBtn = document.getElementById('viewGridBtn');
+      const listBtn = document.getElementById('viewListBtn');
+      if (gridBtn) gridBtn.className = isGrid ? "px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg bg-white shadow-sm text-blue-600" : "px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg text-stone-400 hover:text-stone-600";
+      if (listBtn) listBtn.className = !isGrid ? "px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg bg-white shadow-sm text-blue-600" : "px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg text-stone-400 hover:text-stone-600";
+
+      if (isGrid) {
+        renderCalendarGrid();
+      } else {
+        renderCalendarList();
+      }
+    }
+
+    function renderCalendarList() {
+      const list = document.getElementById('calendarList');
+      if (!list) return;
+
+      if (!projectedLogs.length) {
+        list.innerHTML = '<p class="text-stone-400 italic text-sm text-center py-20">No upcoming events planned.</p>';
+        return;
+      }
+
+      // Filter by current month/year for the list too if preferred, but usually lists are global
+      // Let's keep it global for now as "Upcoming"
+      const sorted = [...projectedLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const groups = {};
+      sorted.forEach(ev => {
+        const key = `${ev.title}_${ev.hours}`;
+        if (!groups[key]) groups[key] = { items: [], id: ev.id, title: ev.title, hours: ev.hours };
+        groups[key].items.push(ev);
+      });
+
+      list.innerHTML = Object.values(groups).map((group, gIdx) => {
+        const isRecurring = group.items.length > 1;
+        const main = group.items[0];
+        const collapseId = `planned-group-${gIdx}`;
+
+        return `
+        <div class="rounded-2xl bg-white border border-stone-100 shadow-sm overflow-hidden group hover:border-blue-200 transition-colors">
+          <!-- Main Group Row -->
+          <div class="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4 w-full sm:w-auto">
+              <div class="w-12 h-12 bg-blue-50 rounded-xl flex flex-col items-center justify-center text-blue-600 border border-blue-100">
+                <span class="text-[8px] font-black uppercase leading-none">${new Date(main.date).toLocaleDateString('en-GB', { month: 'short' })}</span>
+                <span class="text-lg font-black leading-none">${new Date(main.date).getDate()}</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-bold text-stone-900 text-sm leading-tight">${escapeHtml(main.title)}</h4>
+                  ${isRecurring ? `<span class="px-2 py-0.5 bg-blue-600 text-white text-[8px] font-black uppercase rounded-full">Recurring (${group.items.length} Weeks)</span>` : ""}
+                </div>
+                <div class="flex items-center gap-2 mt-0.5">
+                   <p class="text-[10px] font-bold text-stone-400 uppercase tracking-widest">${formatDateHeader(main.date)} • ${main.hours}h</p>
+                   ${main.users ? `<span class="text-[9px] font-black text-blue-400 uppercase tracking-tighter truncate max-w-[100px]" title="${main.users}">• ${main.users.split(",").map(e => getUserAlias(e)).join(", ")}</span>` : ""}
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0">
+              ${isRecurring ? `<button onclick="const el=document.getElementById('${collapseId}'); if(el) el.classList.toggle('hidden')" class="px-4 py-2 bg-stone-50 text-stone-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-stone-100 transition whitespace-nowrap">Show All</button>` : ""}
+              <button onclick="editCalendarEvent('${main.id}')" class="can-modify p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+              <button onclick="calendarMove('${main.id}')" class="can-modify flex-1 sm:flex-none px-4 py-2 bg-green-50 text-green-700 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-green-100 transition whitespace-nowrap">Log it</button>
+
+              <button onclick="calendarDelete('${main.id}')" class="can-modify px-3 py-2 bg-stone-50 text-stone-400 rounded-lg hover:text-red-600 hover:bg-red-50 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Collapsed Dates -->
+          <div id="${collapseId}" class="hidden bg-stone-50/50 border-t border-stone-100 animate-in slide-in-from-top-2 duration-300">
+            ${group.items.map((it, itIdx) => `
+              <div class="px-4 py-3 flex items-center justify-between border-b border-stone-100 last:border-0">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 text-[10px] font-black text-stone-300">#${itIdx + 1}</span>
+                  <span class="text-xs font-bold text-stone-600">${formatDateHeader(it.date)}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="calendarMove('${it.id}')" class="text-[9px] font-black uppercase text-green-600 hover:text-green-700">Log Now</button>
+                  <button onclick="calendarDelete('${it.id}')" class="p-1 text-stone-300 hover:text-red-500"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        `;
+      }).join('');
+    }
+
+    function computeAndRenderStats() {
+      const term = getCurrentTerm();
+      const termLogs = filterLogsByTerm(logs, term);
+      const goal = getTermGoal();
+
+      let myH = 0;
+      let teamH = 0;
+      let hi = 0;
+
+      // 1. Calculate Term Stats
+      termLogs.forEach(l => {
+        const h = parseFloat(l.hours) || 0;
+        teamH += h;
+        const assigned = (l.addedBy || "").split(",").map(e => e.trim().toLowerCase());
+        if (assigned.includes(myEmail.toLowerCase())) {
+          myH += h;
+        }
+        if (parseInt(l.impact) >= 4) hi++;
+      });
+
+      // 2. Projected (Upcoming) Stats for current user
+      let myProjH = 0;
+      const today = _toYMD_(new Date());
+      projectedLogs.forEach(ev => {
+        // Only count future events in current term for the SAME user
+        const evUsers = (ev.users || "").split(",").map(e => e.trim().toLowerCase());
+        if (ev.date >= today && term && ev.date <= term.end && evUsers.includes(myEmail.toLowerCase())) {
+          myProjH += parseFloat(ev.hours || 0);
+        }
+      });
+
+      // 3. Yearly Stats
+      const currentYear = new Date().getFullYear();
+      const yearTerms = terms.filter(t => t.year === currentYear);
+      const yearGoal = yearTerms.reduce((s, t) => s + (t.goal || 0), 0);
+      let yearH = 0;
+      logs.forEach(l => {
+        const inYear = yearTerms.some(t => l.date >= t.start && l.date <= t.end);
+        const assigned = (l.addedBy || "").split(",").map(e => e.trim().toLowerCase());
+        if (inYear && assigned.includes(myEmail.toLowerCase())) {
+          yearH += parseFloat(l.hours || 0);
+        }
+      });
+
+      // 4. Render Numbers
+      const els = {
+        myHours: document.getElementById("myHours"),
+        teamHours: document.getElementById("teamHours"),
+        teamTotalDisplay: document.getElementById("teamTotalDisplay"),
+        hi: document.getElementById("totalHighImpact"),
+        logs: document.getElementById("totalLogs"),
+        termGoalVal: document.getElementById("termGoalVal"),
+        remaining: document.getElementById("hoursRemainingText"),
+        displayPct: document.getElementById("displayPercent"),
+        yearPct: document.getElementById("yearPercent"),
+        yearHoursLabel: document.getElementById("yearHoursLabel")
+      };
+
+      if (els.myHours) els.myHours.innerText = myH.toFixed(1);
+      if (els.teamHours) els.teamHours.innerText = teamH.toFixed(1);
+      if (els.teamTotalDisplay) els.teamTotalDisplay.innerText = `Team Total: ${teamH.toFixed(1)}h`;
+      if (els.hi) els.hi.innerText = hi;
+      if (els.logs) els.logs.innerText = termLogs.length;
+      if (els.termGoalVal) els.termGoalVal.innerText = goal;
+
+      // 5. Render Progress Bars
+      const termPct = Math.min((myH / goal) * 100, 100);
+      const combinedH = myH + myProjH;
+      const combinedPct = Math.min((combinedH / goal) * 100, 100);
+      const yearPct = yearGoal > 0 ? Math.min((yearH / yearGoal) * 100, 100) : 0;
+
+      if (els.displayPct) els.displayPct.innerText = termPct.toFixed(0);
+      if (document.getElementById("progressBar")) document.getElementById("progressBar").style.width = termPct + "%";
+      // Ensure projected bar is always at least the width of the actual bar
+      const projBarWidth = Math.max(termPct, combinedPct);
+      if (document.getElementById("projectedBar")) document.getElementById("projectedBar").style.width = projBarWidth + "%";
+
+      if (document.getElementById("yearProgressBar")) document.getElementById("yearProgressBar").style.width = yearPct + "%";
+      if (els.yearPct) els.yearPct.innerText = yearPct.toFixed(0);
+      if (els.yearHoursLabel) els.yearHoursLabel.innerText = `${yearH.toFixed(1)} / ${yearGoal}H`;
+
+      if (document.getElementById("actualHoursLabel")) document.getElementById("actualHoursLabel").innerText = `LOGGED: ${myH.toFixed(1)}H`;
+      if (document.getElementById("combinedHoursLabel")) document.getElementById("combinedHoursLabel").innerText = `COMBINED: ${combinedH.toFixed(1)}H`;
+
+      if (els.remaining) {
+        const rem = Math.max(0, goal - myH);
+        els.remaining.innerText = `${rem.toFixed(1)} hours left`;
+      }
+    }
+
+    function filterLogsByTerm(logs, term) {
+      if (!term) return logs;
+      return logs.filter(l => l.date >= term.start && l.date <= term.end);
+    }
+
+    function renderDashboardCalendar() {
+      const container = document.getElementById('dashCalendarGrid');
+      const monthLabel = document.getElementById('dashMonthYear');
+      if (!container) return;
+
+      const year = currentCalDate.getFullYear();
+      const month = currentCalDate.getMonth();
+      monthLabel.innerText = currentCalDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+      container.innerHTML = _buildCalendarHtml_(year, month);
+    }
+
+    function renderCalendarGrid() {
+      const grid = document.getElementById('calendarGrid');
+      if (!grid) return;
+
+      const year = currentCalDate.getFullYear();
+      const month = currentCalDate.getMonth();
+      grid.innerHTML = _buildCalendarHtml_(year, month);
+    }
+
+    function _buildCalendarHtml_(year, month) {
+      const firstDay = new Date(year, month, 1).getDay(); // 0 is Sun
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const today = new Date();
+
+      // Adjusted firstDay for Monday start (0=Mon, 6=Sun)
+      let startingDay = firstDay === 0 ? 6 : firstDay - 1;
+
+      let html = `<div class="calendar-grid">`;
+      // Weekday Headers
+      ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(d => {
+        html += `<div class="bg-stone-50 p-2 text-[9px] font-black uppercase text-stone-400 border-b border-stone-200 text-center">${d}</div>`;
+      });
+
+      // Padding days
+      const daysInPrevMonth = new Date(year, month, 0).getDate();
+      for (let i = startingDay - 1; i >= 0; i--) {
+        html += `<div class="grid-day other-month text-[10px] font-bold p-2">${daysInPrevMonth - i}</div>`;
+      }
+
+      // Current Month days
+      for (let d = 1; d <= daysInMonth; d++) {
+        const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayEvents = projectedLogs.filter(e => e.date === dateStr);
+        const dayActuals = logs.filter(e => e.date === dateStr);
+
+        html += `
+          <div class="grid-day ${isToday ? 'today' : ''} flex flex-col gap-1 overflow-hidden min-h-[80px]">
+            <span class="text-[10px] font-black ${isToday ? 'text-blue-600' : 'text-stone-400'}">${d}</span>
+            <div class="flex flex-col gap-0.5 mt-1 overflow-y-auto max-h-[100px]">
+              ${dayEvents.map(ev => `
+                <div onclick="editCalendarEvent('${escapeHtml(ev.id)}')" class="bg-blue-100 text-blue-700 text-[8px] font-bold px-1.5 py-0.5 rounded border border-blue-200 truncate cursor-pointer hover:bg-blue-200 group/ev" title="${ev.title} (${ev.hours}h)">
+                  <span class="group-hover/ev:underline">${ev.hours}h: ${ev.title}</span>
+                </div>
+              `).join('')}
+              ${dayActuals.map(ev => `
+                <div class="bg-green-100 text-green-700 text-[8px] font-bold px-1.5 py-0.5 rounded border border-green-200 truncate" title="Actual: ${ev.relationalType} (${ev.hours}h)">${ev.hours}h: ${ev.relationalType}</div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      html += `</div>`;
+      return html;
+    }
+
+    document.getElementById('calForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const selectedUsers = Array.from(document.querySelectorAll('input[name="calUser"]:checked')).map(cb => cb.value);
+
+      const data = {
+        id: editingCalId || null,
+        title: document.getElementById('calTitle').value,
+        date: document.getElementById('calDate').value,
+        hours: document.getElementById('calHours').value,
+        repeat: document.getElementById('calRepeat').value,
+        intervalWeeks: document.getElementById('calIntervalWeeks').value,
+        users: selectedUsers.join(",")
+      };
+
+      if (selectedUsers.length === 0) {
+        alert("Please select at least one user.");
+        return;
+      }
+
+      setStatus(editingCalId ? "● Updating..." : "● Scheduling...", "text-blue-600", true);
+      try {
+        if (editingCalId) {
+          await apiPost({ action: "calendar_edit", data });
+        } else {
+          await apiPost({ action: "calendar_add", data });
+        }
+        resetCalForm();
+        await fullSync();
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Failed", "text-red-600");
+      }
+    });
+
+    function resetCalForm() {
+      editingCalId = null;
+      document.getElementById('calForm').reset();
+      document.getElementById('calFormTitle').innerText = "Plan an Event";
+      document.getElementById('calSubmitBtn').innerText = "Schedule Event";
+      document.getElementById('calRepeat').parentElement.style.display = "block";
+      document.getElementById('calIntervalWeeksGroup').style.display = "block";
+      updateUserSelectors(); // Reset checkboxes
+    }
+
+    function editCalendarEvent(id) {
+      const ev = projectedLogs.find(x => String(x.id) === String(id));
+      if (!ev) return;
+
+      editingCalId = id;
+      document.getElementById('calTitle').value = ev.title || "";
+      document.getElementById('calDate').value = ev.date || "";
+      document.getElementById('calHours').value = ev.hours || "";
+
+      // Ensure repeat fields are visible and populated
+      document.getElementById('calRepeat').parentElement.style.display = "block";
+      document.getElementById('calIntervalWeeksGroup').style.display = "block";
+
+      document.getElementById('calRepeat').value = ev.repeat || "1";
+      document.getElementById('calIntervalWeeks').value = ev.intervalWeeks || "1";
+
+      // Set checkboxes
+      const evUsers = (ev.users || "").split(",").map(e => e.trim().toLowerCase());
+      document.querySelectorAll('input[name="calUser"]').forEach(cb => {
+        cb.checked = evUsers.includes(cb.value.toLowerCase());
+      });
+      updateSelectedLabel('cal');
+
+      document.getElementById('calFormTitle').innerText = "Edit Planned Event";
+      document.getElementById('calSubmitBtn').innerText = "Update Event";
+
+      showNotification("Editing event series details.", "success");
+
+      // Scroll to form
+      document.getElementById('pageCalendar').scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('calTitle').focus();
+    }
+
+    async function testAdminNotification(action) {
+      if (!confirm("Run diagnostic test?")) return;
+      setStatus("● Diagnostic Running...", "text-orange-600", true);
+      try {
+        const res = await apiPost({ action });
+        showNotification(res.message, "success");
+        setStatus("● Diagnostic Success", "text-green-600");
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Test Failed", "text-red-600");
+      }
+    }
+
+    async function calendarDelete(id) {
+      if (!confirm("Remove this planned event?")) return;
+      setStatus("● Removing...", "text-blue-600", true);
+      try {
+        await apiPost({ action: "calendar_delete", id });
+        await fullSync();
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Failed", "text-red-600");
+      }
+    }
+
+    async function calendarMove(id) {
+      setStatus("● Converting to Log...", "text-blue-600", true);
+      try {
+        await apiPost({ action: "calendar_move", calendarId: id });
+        await fullSync();
+        location.hash = "#/dashboard";
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Failed", "text-red-600");
+      }
+    }
+
+    // ---- Timesheet Methods ----
+    function getFortnightPeriods() {
+      // Use the global cycleStart date (persistent in ScriptProperties)
+      const startRef = _parseYMD_(cycleStart);
+      const now = new Date();
+      const periods = [];
+
+      let current = new Date(startRef);
+      // Generate until today + 1 month
+      const limit = new Date();
+      limit.setMonth(limit.getMonth() + 1);
+
+      while (current < limit) {
+        let pStart = new Date(current);
+        let pEnd = new Date(current);
+
+        // Add 13 days (minimum 14-day window)
+        pEnd.setDate(pEnd.getDate() + 13);
+
+        // Ensure it ends on a Sunday (Day 0)
+        while (pEnd.getDay() !== 0) {
+          pEnd.setDate(pEnd.getDate() + 1);
+        }
+
+        periods.push({
+          start: _toYMD_(pStart),
+          end: _toYMD_(pEnd),
+          startDate: new Date(pStart),
+          endDate: new Date(pEnd)
+        });
+
+        // Next start is the day after the Sunday
+        current = new Date(pEnd);
+        current.setDate(current.getDate() + 1);
+      }
+      return periods.reverse(); // Newest first
+    }
+
+
+    function renderTimesheetPage() {
+      const container = document.getElementById('timesheetContainer');
+      const periods = getFortnightPeriods();
+      const today = _toYMD_(new Date());
+
+      // Filter and Group
+      const active = [];
+      const history = [];
+
+      periods.forEach(p => {
+        const isSubmitted = submittedPeriods.some(s => s.start === p.start && s.end === p.end);
+        const pLogs = logs.filter(l => l.date >= p.start && l.date <= p.end);
+        const isCurrent = today >= p.start && today <= p.end;
+
+        if (isSubmitted) {
+          history.push(p);
+        } else if (isCurrent || pLogs.length > 0) {
+          active.push(p);
+        }
+      });
+
+      function renderCard(p, isHistory) {
+        const isSubmitted = submittedPeriods.some(s => s.start === p.start && s.end === p.end);
+        const isCurrent = today >= p.start && today <= p.end;
+        const isFuture = p.start > today;
+
+        const pLogs = logs.filter(l => l.date >= p.start && l.date <= p.end);
+        const dailySummary = {};
+        let total = 0;
+        pLogs.forEach(l => {
+          const hrs = parseFloat(l.hours || 0);
+          dailySummary[l.date] = (dailySummary[l.date] || 0) + hrs;
+          total += hrs;
+        });
+
+        const statusClass = isSubmitted ? "text-green-600 bg-green-50" : (isFuture ? "text-stone-400 bg-stone-50" : "text-blue-600 bg-blue-50 animate-pulse");
+        const statusText = isSubmitted ? "Submitted" : (isFuture ? "Future" : (isCurrent ? "In Progress" : "Ready to Submit"));
+
+        return `
+          <div class="border rounded-2xl p-6 transition-all ${isCurrent ? 'border-blue-200 ring-2 ring-blue-50' : 'border-stone-100 hover:border-stone-200'} mb-6">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusClass}">${statusText}</span>
+                <h3 class="text-lg font-black mt-2 text-stone-900">${formatDateHeader(p.start)} — ${formatDateHeader(p.end)}</h3>
+              </div>
+              <div class="text-right">
+                <span class="text-[9px] font-black uppercase text-stone-400">Period Total</span>
+                <p class="text-2xl font-black text-stone-900">${total.toFixed(1)}h</p>
+              </div>
+            </div>
+
+            <div class="space-y-1 mb-6">
+              ${Object.keys(dailySummary).sort().map(date => `
+                 <div class="flex items-center justify-between py-2 border-b border-stone-50 text-sm">
+                   <span class="font-bold text-stone-600">${formatDateHeader(date)}</span>
+                   <span class="font-black text-stone-900">${dailySummary[date].toFixed(1)}h</span>
+                 </div>
+              `).join('') || '<p class="text-stone-400 italic text-sm text-center py-4">No hours logged.</p>'}
+            </div>
+
+            ${(!isSubmitted && !isFuture && total > 0) ? `
+              <button onclick='submitTimesheet("${p.start}", "${p.end}", ${JSON.stringify(dailySummary)}, ${total})' 
+                class="can-modify w-full bg-blue-600 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-xl shadow-lg hover:bg-blue-700 transition active:scale-95">
+                Send Daily Summary & Finalize
+              </button>
+            ` : ""}
+
+            ${(isSubmitted && total > 0) ? `
+              <button onclick='submitTimesheet("${p.start}", "${p.end}", ${JSON.stringify(dailySummary)}, ${total}, true)' 
+                class="w-full bg-stone-50 text-stone-600 border border-stone-200 font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-stone-100 transition active:scale-95">
+                Resend Full Email Report
+              </button>
+            ` : ""}
+          </div>
+        `;
+      }
+
+      let html = "";
+
+      html += `<div class="mb-8">
+        <h3 class="text-xs font-black uppercase tracking-[0.2em] text-stone-400 mb-4 flex items-center gap-2">
+          <span class="w-8 h-px bg-stone-200"></span> Current & Pending Submissions
+        </h3>
+        ${active.map(p => renderCard(p, false)).join('') || '<p class="text-stone-400 italic text-sm py-8 text-center bg-stone-50 rounded-2xl border border-dashed">No active periods to show.</p>'}
+      </div>`;
+
+      if (history.length > 0) {
+        html += `<div>
+          <h3 class="text-xs font-black uppercase tracking-[0.2em] text-stone-400 mb-4 flex items-center gap-2">
+             <span class="w-8 h-px bg-stone-200"></span> Submission History
+          </h3>
+          <div class="opacity-70 hover:opacity-100 transition-opacity">
+            ${history.map(p => renderCard(p, true)).join('')}
+          </div>
+        </div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function renderAdminCycleSettings() {
+      const container = document.getElementById('adminCycleSettings');
+      if (!container) return;
+      container.innerHTML = `
+        <div class="bg-stone-50 rounded-2xl p-6 border border-stone-200">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="text-[10px] font-black uppercase tracking-widest text-stone-400">Payroll Cycle Settings</h4>
+            <i class="fas fa-cog text-stone-300"></i>
+          </div>
+          <div class="flex flex-wrap items-center gap-4">
+            <div class="flex-1 min-w-[200px]">
+              <label class="block text-[8px] font-black uppercase text-stone-400 mb-1">Cycle Reference Monday</label>
+              <input type="date" id="cycleStartInput" value="${cycleStart}" class="w-full p-3 rounded-xl border-stone-200 text-sm font-bold">
+            </div>
+            <button onclick="updateCycleStart()" class="bg-stone-900 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition">Update Cycle</button>
+          </div>
+          <p class="mt-3 text-[10px] text-stone-400 leading-relaxed italic">Changing this date will shift all 14-day periods globally. Set this to any Monday that begins a pay period.</p>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 mt-6">
+          <h4 class="text-[10px] font-black uppercase text-orange-600 tracking-widest mb-4">Notification Diagnostics</h4>
+          <div class="flex flex-wrap gap-3">
+            <button onclick="testAdminNotification('test_email')" 
+              class="px-4 py-2 bg-orange-50 text-orange-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition">
+              Send Test Email
+            </button>
+            <button onclick="testAdminNotification('test_reminder')" 
+              class="px-4 py-2 bg-orange-50 text-orange-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition">
+              Trigger Friday Reminder
+            </button>
+          </div>
+          <p class="text-[10px] text-stone-400 mt-2 italic">* These tests send live emails to the configured administrator via Gmail.</p>
+        </div>
+      `;
+    }
+
+    async function updateCycleStart() {
+      const dateString = document.getElementById("cycleStartInput").value;
+      if (!dateString) return;
+      if (!confirm("Shift the fortnightly cycle start to " + dateString + "?\nAll periods will be recalculated.")) return;
+
+      setStatus("● Updating Cycle...", "text-blue-600", true);
+      try {
+        await apiPost({ action: "cycle_start_set", date: dateString });
+        await fullSync();
+        renderRoute();
+        showNotification("Cycle updated successfully!", "success");
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Failed", "text-red-600");
+      }
+    }
+
+    function showNotification(msg, type = "success") {
+      const toast = document.getElementById("notification-toast");
+      if (!toast) return;
+      toast.innerText = msg;
+      toast.style.background = type === "success" ? "#1c1917" : "#ef4444";
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    async function submitTimesheet(start, end, summary, total, isResend = false) {
+      if (!isResend) {
+        if (!confirm(`Are you sure you want to finalize the period ${start} to ${end}?\nThis will email the daily summary to you.`)) return;
+      } else {
+        if (!confirm(`Resend the full email summary for the period ${start} to ${end}?`)) return;
+      }
+
+      setStatus(isResend ? "● Resending..." : "● Submitting Timesheet...", "text-blue-600", true);
+      try {
+        await apiPost({
+          action: "timesheet_submit",
+          periodStart: start,
+          periodEnd: end,
+          summary: summary,
+          totalHours: total
+        });
+        await fullSync();
+        showNotification(isResend ? "Report resent successfully!" : "Timesheet submitted successfully!", "success");
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Action Failed", "text-red-600");
+      }
+    }
+
+    // ---- admin: User Registry ----
+    async function refreshUserManagementList() {
+      if (myRole !== "admin") return;
+
+      const container = document.getElementById("adminUserRegistry");
+      if (!container) return;
+
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+             <h3 class="text-[10px] font-black uppercase tracking-widest text-stone-400">Team Members (${users.length})</h3>
+             <button onclick="addUserRow()" class="px-3 py-1 bg-blue-600 text-white text-[10px] font-black uppercase rounded-lg hover:bg-blue-700">Add User</button>
+          </div>
+          <div class="bg-white border border-stone-100 rounded-2xl overflow-hidden shadow-sm">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-stone-50 border-b border-stone-100">
+                <tr>
+                  <th class="p-3 text-[9px] font-black uppercase text-stone-400">Email</th>
+                  <th class="p-3 text-[9px] font-black uppercase text-stone-400">Shorthand</th>
+                  <th class="p-3 text-[9px] font-black uppercase text-stone-400">Role</th>
+                  <th class="p-3 text-[9px] font-black uppercase text-stone-400">Reminders</th>
+                  <th class="p-3"></th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody">
+                ${users.map((u, i) => `
+                  <tr class="border-b border-stone-50 hover:bg-stone-50/50">
+                    <td class="p-3 font-bold text-stone-700">${escapeHtml(u.email)}</td>
+                    <td class="p-3"><input type="text" value="${escapeHtml(u.alias)}" onchange="updateUserField(${i}, 'alias', this.value)" class="w-24 p-1 border rounded bg-transparent"></td>
+                    <td class="p-3">
+                      <select onchange="updateUserField(${i}, 'role', this.value)" class="p-1 border rounded bg-transparent">
+                        <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
+                        <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                      </select>
+                    </td>
+                    <td class="p-3 text-center">
+                      <input type="checkbox" ${u.reminders ? 'checked' : ''} onchange="updateUserField(${i}, 'reminders', this.checked)" class="w-4 h-4">
+                    </td>
+                    <td class="p-3 text-right">
+                      <button onclick="removeUserRow(${i})" class="text-red-400 hover:text-red-600 p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="flex justify-end pt-2">
+            <button onclick="saveUsers()" id="saveUsersBtn" class="bg-stone-900 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition shadow-lg">Save Changes</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function addUserRow() {
+      const email = prompt("Enter full Gmail address of the new user:");
+      if (!email || !email.includes("@")) return;
+      users.push({ email: email.toLowerCase(), alias: email.split("@")[0], role: "user", reminders: true });
+      refreshUserManagementList();
+      updateUserSelectors(); // Update dropdowns immediately
+    }
+
+    function removeUserRow(i) {
+      if (!confirm("Are you sure you want to remove this user? They will lose access immediately.")) return;
+      users.splice(i, 1);
+      refreshUserManagementList();
+    }
+
+    function updateUserField(i, field, val) {
+      users[i][field] = val;
+    }
+
+    async function saveUsers() {
+      const btn = document.getElementById("saveUsersBtn");
+      const oldText = btn.innerText;
+      btn.innerText = "SAVING...";
+      btn.disabled = true;
+
+      try {
+        await apiPost({ action: "users_set", users: users });
+        showNotification("User registry updated successfully!", "success");
+        await fullSync();
+      } catch (err) {
+        alert(String(err));
+      } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+      }
+    }
+
+    // ---- editing ----
+    function startEdit(id) {
+      const entry = logs.find(l => String(l.id) === String(id));
+      if (!entry) return;
+
+      editingId = id;
+      const banner = document.getElementById("editModeBanner");
+      if (banner) banner.classList.remove("hidden");
+      const idText = document.getElementById("editingIdText");
+      if (idText) idText.innerText = String(id);
+
+      const d = document.getElementById('date');
+      if (d) d.value = entry.date || "";
+      const et = document.getElementById('engagementTime');
+      if (et) et.value = entry.engagementTime || "";
+      const h = document.getElementById('hours');
+      if (h) h.value = entry.hours ?? "";
+      const rt = document.getElementById('relationalType');
+      if (rt) rt.value = entry.relationalType ?? "";
+      const att = document.getElementById('attendance');
+      if (att) att.value = entry.attendance ?? 1;
+      const t = document.getElementById('target');
+      if (t) t.value = entry.target ?? "";
+      const k = document.getElementById('kpi');
+      if (k) k.value = entry.kpi ?? "";
+      const i = document.getElementById('impact');
+      if (i) i.value = entry.impact ?? 0;
+      updateImpactInfo(entry.impact ?? 0);
+      const n = document.getElementById('notes');
+      if (n) n.value = entry.notes ?? "";
+
+      const title = document.getElementById('formTitle');
+      if (title) title.innerText = "Edit Entry";
+      const container = document.getElementById('formContainer');
+      if (container) container.classList.add('edit-mode');
+
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn) {
+        submitBtn.innerText = "Apply Edit";
+        submitBtn.classList.remove('bg-stone-900');
+        submitBtn.classList.add('bg-blue-600');
+      }
+
+      const cancel = document.getElementById('cancelEdit');
+      if (cancel) cancel.classList.remove('hidden');
+      clearFormError();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetToNew() {
+      editingId = null;
+      const form = document.getElementById('logForm');
+      if (form) form.reset();
+      const title = document.getElementById('formTitle');
+      if (title) title.innerText = "New Engagement";
+      const container = document.getElementById('formContainer');
+      if (container) container.classList.remove('edit-mode');
+
+      const banner = document.getElementById("editModeBanner");
+      if (banner) banner.classList.add("hidden");
+      const idText = document.getElementById("editingIdText");
+      if (idText) idText.innerText = "";
+
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn) {
+        submitBtn.innerText = "Send to Sheet";
+        submitBtn.classList.remove('bg-blue-600');
+        submitBtn.classList.add('bg-stone-900');
+      }
+
+      const cancel = document.getElementById('cancelEdit');
+      if (cancel) cancel.classList.add("hidden");
+      document.getElementById('impactBadge').innerText = 'Lvl 0';
+      clearFormError();
+    }
+
+    async function deleteRow(id) {
+      if (!confirm("Delete this from Google Sheet?")) return;
+      setStatus("● Deleting...", "text-red-600", true);
+      await apiPost({ action: "delete", id });
+      await fullSync();
+      resetToNew();
+    }
+
+    const IMPACT_DESCRIPTIONS = {
+      0: "Initial interaction or brief check-in.",
+      1: "General conversation / Building rapport.",
+      2: "Ongoing trust building and active engagement.",
+      3: "Significant support provided / Planning future steps.",
+      4: "High-intensity intervention or targeted support.",
+      5: "Crisis intervention or major life-changing support."
+    };
+
+    function updateImpactInfo(val) {
+      const v = parseInt(val, 10);
+      document.getElementById('impactBadge').innerText = `Lvl ${v}`;
+      document.getElementById('impactDesc').innerText = `Lvl ${v}: ${IMPACT_DESCRIPTIONS[v]}`;
+
+      const badge = document.getElementById('impactBadge');
+      if (v >= 4) {
+        badge.className = "text-[10px] font-black px-2 py-0.5 bg-red-600 text-white rounded-lg shadow-md";
+      } else {
+        badge.className = "text-[10px] font-black px-2 py-0.5 bg-stone-200 text-stone-700 rounded-lg shadow-sm";
+      }
+    }
+
+    document.getElementById('impact').addEventListener('input', (e) => {
+      updateImpactInfo(e.target.value);
+    });
+
+    document.getElementById('logForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearFormError();
+
+      // All authenticated users can add/edit
+
+      // Collect all selected users
+      const selectedUsers = Array.from(document.querySelectorAll('input[name="logUser"]:checked')).map(cb => cb.value);
+
+      const entry = {
+        date: document.getElementById('date').value,
+        addedBy: selectedUsers.join(","),
+        engagementTime: document.getElementById('engagementTime').value,
+        hours: document.getElementById('hours').value,
+        relationalType: document.getElementById('relationalType').value,
+        attendance: document.getElementById('attendance').value,
+        target: document.getElementById('target').value,
+        kpi: document.getElementById('kpi').value,
+        impact: document.getElementById('impact').value,
+        notes: document.getElementById('notes').value,
+        id: editingId || ("ID-" + Math.random().toString(36).slice(2, 11) + Date.now())
+      };
+
+      if (!entry.date) return showFormError("Date is required.");
+      if (selectedUsers.length === 0) return showFormError("At least one user must be selected.");
+      if (!entry.relationalType) return showFormError("Relational Type is required.");
+      if (!entry.kpi) return showFormError("KPI Outcome is required.");
+
+      setStatus(editingId ? "● Updating..." : "● Adding...", "text-blue-600", true);
+
+      try {
+        if (editingId) {
+          await apiPost({ action: "edit", newEntry: entry });
+        } else {
+          await apiPost({ action: "add", data: entry });
+        }
+        resetToNew();
+        await fullSync();
+      } catch (err) {
+        alert(String(err?.message || err));
+        setStatus("● Save failed", "text-red-600");
+      }
+    });
+
+    // ---- google sign-in ----
+    document.getElementById("backupSignInBtn").addEventListener("click", () => {
+      try {
+        if (window.google && google.accounts && google.accounts.id) {
+          google.accounts.id.prompt();
+        } else {
+          alert("Google sign-in hasn’t loaded yet. Refresh and try again.");
+        }
+      } catch (e) {
+        alert(String(e?.message || e));
+      }
+    });
+
+    function initGoogle() {
+      if (!window.google || !google.accounts || !google.accounts.id) return;
+
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: async (resp) => {
+          try {
+            authToken = resp.credential;
+            localStorage.setItem("impacttracker_id_token", authToken);
+
+            const me = await apiGet("me");
+            setSignedInUI(me.email, me.role);
+
+            // Add viewer-mode class to body if necessary
+            document.body.classList.toggle("viewer-mode", me.role === "viewer");
+
+            setStatus("● Signed in", "text-green-600");
+            await fullSync();
+          } catch (err) {
+            console.error(err);
+            setStatus("● Access denied", "text-red-600");
+            alert(String(err?.message || err));
+            authToken = "";
+            localStorage.removeItem("impacttracker_id_token");
+            setSignedOutUI();
+          }
+        }
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById("gSignIn"),
+        { theme: "outline", size: "large", text: "signin_with", shape: "pill" }
+      );
+    }
+
+    // ---- Term helpers ----
+    function getCurrentTerm() {
+      const today = _toYMD_(new Date());
+      return terms.find(t => today >= t.start && today <= t.end) || null;
+    }
+
+    function getTermGoal() {
+      const ct = getCurrentTerm();
+      return ct ? ct.goal : TERM_GOAL;
+    }
+
+    // ---- Reports Page ----
+    function renderReportsPage() {
+      const container = document.getElementById('reportsContent');
+      const yearSel = document.getElementById('reportYearFilter');
+      if (!container) return;
+
+      // Get unique years from terms
+      const years = [...new Set(terms.map(t => t.year))].sort((a, b) => b - a);
+      if (!years.length) {
+        container.innerHTML = '<p class="text-stone-400 italic text-sm text-center py-12">No terms configured. Admin can add terms in the Admin panel.</p>';
+        return;
+      }
+
+      // Populate year selector
+      const currentYearSel = yearSel.value || String(years[0]);
+      yearSel.innerHTML = years.map(y =>
+        `<option value="${y}" ${String(y) === currentYearSel ? 'selected' : ''}>${y}</option>`
+      ).join('') + '<option value="all">All Years</option>';
+
+      const selectedYear = yearSel.value;
+      const filteredTerms = selectedYear === 'all' ? terms : terms.filter(t => String(t.year) === selectedYear);
+
+      // Calculate stats for each term
+      let html = '<div class="overflow-x-auto"><table class="w-full text-sm">';
+      html += '<thead><tr class="border-b-2 border-stone-200">';
+      html += '<th class="text-left py-3 px-4 text-[10px] font-black uppercase text-stone-400">Term</th>';
+      html += '<th class="text-left py-3 px-4 text-[10px] font-black uppercase text-stone-400">Period</th>';
+      html += '<th class="text-center py-3 px-4 text-[10px] font-black uppercase text-stone-400">Hours</th>';
+      html += '<th class="text-center py-3 px-4 text-[10px] font-black uppercase text-stone-400">Goal</th>';
+      html += '<th class="text-center py-3 px-4 text-[10px] font-black uppercase text-stone-400">Progress</th>';
+      html += '<th class="text-center py-3 px-4 text-[10px] font-black uppercase text-stone-400">Logs</th>';
+      html += '<th class="text-center py-3 px-4 text-[10px] font-black uppercase text-stone-400">High Impact</th>';
+      html += '</tr></thead><tbody>';
+
+      let grandTotalHours = 0, grandTotalLogs = 0, grandTotalHigh = 0;
+
+      filteredTerms.forEach(term => {
+        const termLogs = logs.filter(l => l.date >= term.start && l.date <= term.end);
+        const hrs = termLogs.reduce((s, l) => s + parseFloat(l.hours || 0), 0);
+        const high = termLogs.filter(l => parseInt(l.impact, 10) >= 4).length;
+        const pct = Math.min((hrs / term.goal) * 100, 100);
+        const pctColor = pct >= 100 ? 'text-green-600 bg-green-50' : pct >= 50 ? 'text-blue-600 bg-blue-50' : 'text-orange-600 bg-orange-50';
+
+        grandTotalHours += hrs;
+        grandTotalLogs += termLogs.length;
+        grandTotalHigh += high;
+
+        html += `<tr class="border-b border-stone-50 hover:bg-stone-50/50">
+          <td class="py-3 px-4 font-bold text-stone-900">${escapeHtml(term.name)} ${term.year}</td>
+          <td class="py-3 px-4 text-stone-500 text-xs">${term.start} → ${term.end}</td>
+          <td class="py-3 px-4 text-center font-black">${hrs.toFixed(1)}h</td>
+          <td class="py-3 px-4 text-center text-stone-400">${term.goal}h</td>
+          <td class="py-3 px-4 text-center"><span class="px-2 py-1 rounded-full text-[10px] font-black ${pctColor}">${pct.toFixed(0)}%</span></td>
+          <td class="py-3 px-4 text-center">${termLogs.length}</td>
+          <td class="py-3 px-4 text-center">${high}</td>
+          <td class="py-3 px-4 text-right">
+             <button onclick="sendTermSummary('${term.name}', ${term.year})" class="px-3 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-100 transition">Email Summary</button>
+          </td>
+        </tr>`;
+      });
+
+      html += `<tr class="border-t-2 border-stone-300 bg-stone-50 font-black">
+        <td class="py-3 px-4" colspan="2">TOTAL</td>
+        <td class="py-3 px-4 text-center">${grandTotalHours.toFixed(1)}h</td>
+        <td class="py-3 px-4 text-center text-stone-400">${filteredTerms.reduce((s, t) => s + t.goal, 0)}h</td>
+        <td class="py-3 px-4 text-center"></td>
+        <td class="py-3 px-4 text-center">${grandTotalLogs}</td>
+        <td class="py-3 px-4 text-center">${grandTotalHigh}</td>
+      </tr>`;
+
+      html += '</tbody></table></div>';
+
+      // Term progress bars
+      html += '<div class="mt-8 space-y-4">';
+      html += '<h3 class="text-[10px] font-black uppercase tracking-widest text-stone-400">Visual Progress</h3>';
+      filteredTerms.forEach(term => {
+        const termLogs = logs.filter(l => l.date >= term.start && l.date <= term.end);
+        const hrs = termLogs.reduce((s, l) => s + parseFloat(l.hours || 0), 0);
+        const pct = Math.min((hrs / term.goal) * 100, 100);
+        const barColor = pct >= 100 ? 'bg-green-500' : 'bg-blue-500';
+
+        html += `<div>
+          <div class="flex justify-between mb-1">
+            <span class="text-xs font-bold text-stone-700">${escapeHtml(term.name)} ${term.year}</span>
+            <span class="text-xs font-black text-stone-500">${hrs.toFixed(1)}h / ${term.goal}h</span>
+          </div>
+          <div class="h-3 bg-stone-100 rounded-full overflow-hidden">
+            <div class="${barColor} h-full rounded-full transition-all duration-700" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+
+      container.innerHTML = html;
+    }
+
+    // ---- Utilities ----
+    function _toYMD_(date) {
+      if (!date) return "";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "";
+      return d.toISOString().split('T')[0];
+    }
+
+    function _parseYMD_(ymdStr) {
+      if (!ymdStr) return new Date();
+      const parts = ymdStr.split("-");
+      if (parts.length !== 3) return new Date(ymdStr);
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    function getUserAlias(email) {
+      if (!email) return "N/A";
+      const u = users.find(x => x.email.toLowerCase() === email.toLowerCase());
+      return u ? u.alias : email.split("@")[0];
+    }
+
+    function updateUserSelectors() {
+      const logContainer = document.getElementById("logUserDropdown");
+      const calContainer = document.getElementById("calUserDropdown");
+
+      const buildHtml = (prefix) => {
+        let html = `
+          <div class="flex items-center gap-2 p-1 mb-2 border-b border-stone-100 pb-2">
+            <button type="button" onclick="bulkToggleUsers('${prefix}', true)" class="flex-1 text-[9px] font-black uppercase tracking-tight bg-stone-100 text-stone-600 py-1.5 rounded hover:bg-stone-200">Select All</button>
+            <button type="button" onclick="bulkToggleUsers('${prefix}', false)" class="flex-1 text-[9px] font-black uppercase tracking-tight bg-stone-50 text-stone-400 py-1.5 rounded hover:bg-stone-100">Clear</button>
+          </div>
+        `;
+        html += users.map((u, i) => `
+          <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-stone-50 cursor-pointer transition-colors border border-stone-100 mb-1">
+            <input type="checkbox" name="${prefix}User" value="${u.email}" 
+              ${u.email.toLowerCase() === myEmail.toLowerCase() ? 'checked' : ''} 
+              onchange="updateSelectedLabel('${prefix}')"
+              class="w-4 h-4 rounded border-stone-300 text-blue-600 focus:ring-blue-500">
+            <span class="text-[11px] font-bold text-stone-700">${escapeHtml(u.alias)}</span>
+          </label>
+        `).join("");
+        return html;
+      };
+
+      if (logContainer) logContainer.innerHTML = buildHtml("log");
+      if (calContainer) calContainer.innerHTML = buildHtml("cal");
+
+      updateSelectedLabel('log');
+      updateSelectedLabel('cal');
+    }
+
+    function toggleUserDropdown(prefix) {
+      const el = document.getElementById(`${prefix}UserDropdown`);
+      if (el) el.classList.toggle("hidden");
+    }
+
+    // Close dropdowns on outside click
+    window.addEventListener("click", (e) => {
+      ['log', 'cal'].forEach(prefix => {
+        const drop = document.getElementById(`${prefix}UserDropdown`);
+        const btn = drop?.previousElementSibling;
+        if (drop && !drop.contains(e.target) && !btn?.contains(e.target)) {
+          drop.classList.add("hidden");
+        }
+      });
+    });
+
+    function updateSelectedLabel(prefix) {
+      const selected = Array.from(document.querySelectorAll(`input[name="${prefix}User"]:checked`))
+        .map(cb => getUserAlias(cb.value));
+      const el = document.getElementById(`${prefix}SelectedLabel`);
+      if (el) {
+        if (selected.length === 0) el.innerText = "Select members...";
+        else if (selected.length === 1) el.innerText = selected[0];
+        else el.innerText = `${selected[0]} + ${selected.length - 1} more`;
+      }
+    }
+
+    function bulkToggleUsers(prefix, checkAll) {
+      document.querySelectorAll(`input[name="${prefix}User"]`).forEach(cb => {
+        cb.checked = checkAll;
+      });
+      updateSelectedLabel(prefix);
+    }
+
+    function toDMY(date) {
+      if (!date) return "";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return String(date);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+
+    function toFullDMY(timestamp) {
+      if (!timestamp || timestamp === 'Historical') return timestamp;
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return timestamp;
+      const dmy = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      return `${dmy} ${time}`;
+    }
+
+    window.addEventListener("load", async () => {
+      if (!location.hash) location.hash = "#/dashboard";
+      initGoogle();
+      applyOptionsToForm(SEED_OPTIONS);
+
+      if (authToken) {
+        try {
+          const me = await apiGet("me");
+          setSignedInUI(me.email, me.role);
+          document.body.classList.toggle("viewer-mode", me.role === "viewer");
+          await fullSync();
+        } catch (err) {
+          authToken = "";
+          localStorage.removeItem("impacttracker_id_token");
+          setSignedOutUI();
+        }
+      } else {
+        setSignedOutUI();
+      }
+
+      renderRoute();
+    });
+
+    // expose functions used by onclick
+    window.go = go;
+    window.fullSync = fullSync;
+
+    window.refreshUserManagementList = refreshUserManagementList;
+    window.addUserRow = addUserRow;
+    window.removeUserRow = removeUserRow;
+    window.updateUserField = updateUserField;
+    window.saveUsers = saveUsers;
+
+    window.loadDropdownSettings = loadDropdownSettings;
+    window.saveDropdownSettings = saveDropdownSettings;
+    window.addDropdownOption = addDropdownOption;
+    window.removeDropdownOption = removeDropdownOption;
+    window.startDropdownEdit = startDropdownEdit;
+    window.saveDropdownEdit = saveDropdownEdit;
+    window.cancelDropdownEdit = cancelDropdownEdit;
+
+    window.calendarDelete = calendarDelete;
+    window.calendarMove = calendarMove;
+    window.submitTimesheet = submitTimesheet;
+
+    window.startEdit = startEdit;
+    window.deleteRow = deleteRow;
+    window.resetToNew = resetToNew;
+
+    window.renderReportsPage = renderReportsPage;
+    window.testAdminNotification = testAdminNotification;
+    window.updateCycleStart = updateCycleStart;
+    window.toggleDateCollapse = toggleDateCollapse;
+    window.changeMonth = changeMonth;
+    window.setCalendarView = setCalendarView;
+
+    async function sendTermSummary(name, year) {
+      if (!confirm(`Send a detailed impact summary for ${name} ${year} to your email?`)) return;
+      setStatus("● Generating Summary...", "text-blue-600", true);
+      try {
+        const res = await apiPost({ action: "send_term_summary", termName: name, year: year });
+        showNotification(res.message, "success");
+        setStatus("● Summary Sent", "text-green-600");
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Failed", "text-red-600");
+      }
+    }
+    window.sendTermSummary = sendTermSummary;
+
+    function renderTermEditor() {
+      const container = document.getElementById('termEditorList');
+      const yearFilter = document.getElementById('termYearFilter');
+      if (!container || !yearFilter) return;
+
+      // Populate year filter if empty
+      const years = [...new Set(terms.map(t => t.year))].sort((a, b) => b - a);
+      if (yearFilter.innerHTML.trim() === "" || yearFilter.innerHTML.includes('Loading')) {
+        yearFilter.innerHTML = years.map(y => `<option value="${y}" ${String(y) === String(new Date().getFullYear()) ? 'selected' : ''}>${y}</option>`).join('');
+      }
+
+      const selectedYear = yearFilter.value;
+      const filtered = terms.filter(t => String(t.year) === String(selectedYear));
+
+      container.innerHTML = filtered.map((t, i) => {
+        const globalIdx = terms.indexOf(t);
+        return `
+         <div class="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+           <div class="flex items-center justify-between mb-3">
+             <span class="text-sm font-black text-stone-900">${t.name} ${t.year}</span>
+           </div>
+           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+             <div>
+               <label class="block text-[8px] font-black uppercase text-stone-400 mb-1">Start Date</label>
+               <input type="date" value="${t.start}" onchange="updateTermField(${globalIdx}, 'start', this.value)" class="w-full p-2 rounded-lg border-stone-200 text-xs font-bold">
+             </div>
+             <div>
+               <label class="block text-[8px] font-black uppercase text-stone-400 mb-1">End Date</label>
+               <input type="date" value="${t.end}" onchange="updateTermField(${globalIdx}, 'end', this.value)" class="w-full p-2 rounded-lg border-stone-200 text-xs font-bold">
+             </div>
+             <div>
+               <label class="block text-[8px] font-black uppercase text-stone-400 mb-1">Hours Goal</label>
+               <input type="number" value="${t.goal}" onchange="updateTermField(${globalIdx}, 'goal', this.value)" class="w-full p-2 rounded-lg border-stone-200 text-xs font-bold">
+             </div>
+             <div class="flex items-end">
+               <button onclick="saveTerms()" class="w-full bg-stone-900 text-white p-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition">Save</button>
+             </div>
+           </div>
+         </div>
+       `;
+      }).join('') || '<p class="text-stone-400 italic text-xs">No terms found for this year.</p>';
+    }
+    window.renderTermEditor = renderTermEditor;
+
+    function toggleAdminSection(sectionId, headerEl) {
+      const content = document.getElementById(sectionId);
+      if (!content) return;
+      const isOpening = !content.classList.contains('open');
+
+      // Close other sections for "accordion" feel
+      document.querySelectorAll('.admin-accordion-content').forEach(el => el.classList.remove('open'));
+      document.querySelectorAll('.admin-card-header').forEach(el => el.classList.remove('active'));
+
+      if (isOpening) {
+        content.classList.add('open');
+        if (headerEl) headerEl.classList.add('active');
+        // If it's the dropdown section, load settings
+        if (sectionId === 'section-dropdowns') loadDropdownSettings();
+      }
+    }
+    window.toggleAdminSection = toggleAdminSection;
+
+    function updateTermField(i, field, val) {
+      terms[i][field] = (field === 'goal') ? parseFloat(val) : val;
+    }
+    window.updateTermField = updateTermField;
+
+    async function saveTerms() {
+      setStatus("● Saving Terms...", "text-blue-600", true);
+      try {
+        await apiPost({ action: "terms_set", terms: terms });
+        showNotification("Term timeframes updated!", "success");
+        await fullSync();
+      } catch (err) {
+        alert(String(err));
+        setStatus("● Save failed", "text-red-600");
+      }
+    }
+    window.saveTerms = saveTerms;
+  </script>
+</body>
+
+</html>
